@@ -1,9 +1,13 @@
 (() => {
   'use strict';
-  const warm = () => {
+  const warmModules = () => {
     const bg = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
     const tf = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
     Promise.allSettled([import(bg), import(tf)]).catch(() => {});
+  };
+  const warmVision = () => {
+    if (typeof window.warmDolapyAI === 'function') window.warmDolapyAI();
+    else window.setTimeout(() => typeof window.warmDolapyAI === 'function' && window.warmDolapyAI(), 2500);
   };
   const loadScript = (src, marker) => {
     if (document.querySelector(`script[${marker}]`)) return;
@@ -18,10 +22,12 @@
     loadScript('/context-engine.js', 'data-dolapy-context-engine');
   };
   if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(warm, { timeout: 2500 });
+    window.requestIdleCallback(warmModules, { timeout: 2500 });
+    window.requestIdleCallback(warmVision, { timeout: 6500 });
     window.requestIdleCallback(loadContracts, { timeout: 3500 });
   } else {
-    window.setTimeout(warm, 1200);
+    window.setTimeout(warmModules, 1200);
+    window.setTimeout(warmVision, 4500);
     window.setTimeout(loadContracts, 1800);
   }
 })();
