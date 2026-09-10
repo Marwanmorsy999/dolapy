@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b23">
   <meta name="description" content="Dolapy — photograph your clothes, isolate them, identify them, and style your wardrobe.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dolapy">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <title>Dolapy — Your wardrobe, styled</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="ai.css">
@@ -12,7 +19,7 @@
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true" focusable="false">
-  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2Z"/><path d="M19 16l.7 2.3L22 19l-2.3-.7L19 22l-.7-2.3L16 19l2.3-.7L19 22Z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2Z"/><path d="M19 16l.7 2.3L22 19l-.7-2.3L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></symbol>
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 7.5h3l1.3-2h7.4l1.3 2h3A2 2 0 0 1 22 9.5v8A2 2 0 0 1 20 19.5H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13.5" r="4"/></symbol>
   <symbol id="i-closet" viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8v8M15 8v8M3 20h18"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.2 4.2L19 6.5"/></symbol>
@@ -20,6 +27,7 @@
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 15 .9 1.6-2 2-1.6-.9-1.3.6-.5 1.8h-2.8l-.5-1.8-1.3-.6-1.6.9-2-2 .9-1.6-.6-1.3-1.8-.5v-2.8l1.8-.5.6-1.3-.9-1.6 2-2 1.6.9 1.3-.6.5-1.8h2.8l.5 1.8 1.3.6 1.6-.9 2 2-.9 1.6.6 1.3 1.8.5v2.8l-1.8.5-.6 1.3Z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></symbol>
 </svg>
 <div class="app">
   <aside class="side">
@@ -43,6 +51,6 @@
 <input id="fileInput" class="hide" type="file" accept="image/*"><input id="aiFileInput" class="hide" type="file" accept="image/*">
 <div id="cameraModal" class="modal-wrap" hidden><div class="modal camera-modal" role="dialog" aria-modal="true" aria-labelledby="cameraTitle"><div class="modal-head"><div><div class="eyebrow green">Camera</div><h2 id="cameraTitle">Photograph this piece.</h2></div><button class="close icon-button" id="closeCamera" aria-label="Close camera">×</button></div><div class="camera-preview"><video id="cameraVideo" autoplay playsinline muted></video><canvas id="cameraCanvas" class="hide"></canvas><div id="cameraHint" class="camera-hint">One piece in frame · a simple background works best.</div></div><div class="camera-actions"><button class="secondary" id="cameraGallery"><span class="btn-icon"><svg><use href="#i-grid"/></svg></span> Choose from device</button><button class="primary" id="capturePhoto"><span class="btn-icon"><svg><use href="#i-camera"/></svg></span> Capture</button></div><div class="note" id="cameraNote">The rear camera is preferred on phones.</div></div></div>
 <div id="modal" class="modal-wrap" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-head"><div><div class="eyebrow green">AI identified</div><h2 id="modalTitle">Meet your piece.</h2></div><button class="close icon-button" id="closeModal" aria-label="Close"><span aria-hidden="true">×</span></button></div><div class="preview cutout-stage"><img id="previewImg" alt="Processed clothing cutout"></div><div class="ai-summary"><span class="ai-check"><svg><use href="#i-check"/></svg></span><span>Background removed</span><span class="dot">•</span><span>Piece identified</span><span class="dot">•</span><span>Name suggested</span></div><div class="fields"><label>Name<input id="fName" autocomplete="off"></label><label>Category<select id="fCategory"><option value="tops">Tops</option><option value="bottoms">Bottoms</option><option value="dresses">Dresses</option><option value="outerwear">Outerwear</option><option value="shoes">Shoes</option><option value="accessories">Accessories</option></select></label><label>Color<input id="fColor" placeholder="navy" autocomplete="off"></label><label>Style<select id="fStyle"><option>casual</option><option>streetwear</option><option>smart</option><option>athletic</option><option>utility</option><option>minimal</option><option>vintage</option><option>preppy</option></select></label></div><button class="primary full" id="saveItem"><span class="btn-icon"><svg><use href="#i-check"/></svg></span> Add to wardrobe</button><div class="queue" id="queueInfo"></div><div class="note">Your photos and recognition stay in the browser for this static build. The first AI scan downloads model files; later scans reuse the browser cache.</div></div></div>
-<script src="migrate.js"></script><script src="preload.js"></script><script src="settings.js"></script><script src="app.js" defer></script><script src="ai-overlay.js" defer></script><script src="mobile-menu.js" defer></script>
+<script src="migrate.js"></script><script src="preload.js"></script><script src="settings.js"></script><script src="pwa.js"></script><script src="app.js" defer></script><script src="ai-overlay.js" defer></script><script src="mobile-menu.js" defer></script>
 </body>
 </html>
