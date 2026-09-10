@@ -3,10 +3,10 @@
 const STORE='dolapy.pages.v3';
 const BG_URL='https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
 const TF_URL='https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
-const MODEL='ff13/fashion-clip';
+const MODEL='Xenova/clip-vit-base-patch32';
 const $=s=>document.querySelector(s);
 let removeBackground=null,segmentForeground=null,classifier=null,aiLoadPromise=null,cameraStream=null,current=null,queue=[];
-const perf=()=>window.DolapyPerformance||{mobile:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),lowPower:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)&&!navigator.gpu,imageSize:()=>768,segmentationModel:()=>'isnet_fp16',classifierOptions:()=>navigator.gpu?{device:'webgpu',dtype:'fp16'}:{device:'wasm',dtype:'q8'}};
+const perf=()=>window.DolapyPerformance||{mobile:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),lowPower:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)&&!navigator.gpu,imageSize:()=>768,segmentationModel:()=>'isnet_fp16',classifierOptions:()=>({device:'wasm',dtype:'q8'})};
 const LABELS=['t-shirt','graphic t-shirt','polo shirt','button-up shirt','shirt','hoodie','sweater','cardigan','jacket','coat','blazer','overshirt','jeans','wide-leg trousers','trousers','cargo pants','chinos','shorts','skirt','dress','suit','sneakers','boots','loafers','sandals','heels','slides','bag','backpack','cap','hat','belt','watch','scarf','glasses'];
 const COLORS={black:['black','charcoal','graphite'],white:['white','cream','ivory'],grey:['grey','gray','silver'],neutral:['beige','tan','camel','khaki','sand','stone','oat'],brown:['brown','chocolate','mocha','coffee'],blue:['navy','blue','denim','cobalt','teal','sky','azure'],green:['green','olive','sage','forest','mint'],red:['red','burgundy','maroon','wine','crimson'],orange:['orange','rust','terracotta','coral'],yellow:['yellow','mustard','gold'],purple:['purple','lavender','lilac','violet'],pink:['pink','rose','blush']};
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,Number(n)||0));
