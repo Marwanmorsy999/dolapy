@@ -6,41 +6,397 @@ const TF_URL='https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 const MODEL='ff13/fashion-clip';
 const $=s=>document.querySelector(s);
 let removeBackground=null,segmentForeground=null,classifier=null,aiLoadPromise=null,cameraStream=null,current=null,queue=[];
-const perf=()=>window.DolapyPerformance||{mobile:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),lowPower:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)&&!navigator.gpu,imageSize:()=>768,segmentationModel:()=> 'isnet_fp16',classifierOptions:()=>navigator.gpu?{device:'webgpu',dtype:'fp16'}:{device:'wasm',dtype:'q8'}};
+const perf=()=>window.DolapyPerformance||{mobile:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),lowPower:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)&&!navigator.gpu,imageSize:()=>768,segmentationModel:()=>'isnet_fp16',classifierOptions:()=>navigator.gpu?{device:'webgpu',dtype:'fp16'}:{device:'wasm',dtype:'q8'}};
 const LABELS=['t-shirt','graphic t-shirt','polo shirt','button-up shirt','shirt','hoodie','sweater','cardigan','jacket','coat','blazer','overshirt','jeans','wide-leg trousers','trousers','cargo pants','chinos','shorts','skirt','dress','suit','sneakers','boots','loafers','sandals','heels','slides','bag','backpack','cap','hat','belt','watch','scarf','glasses'];
 const COLORS={black:['black','charcoal','graphite'],white:['white','cream','ivory'],grey:['grey','gray','silver'],neutral:['beige','tan','camel','khaki','sand','stone','oat'],brown:['brown','chocolate','mocha','coffee'],blue:['navy','blue','denim','cobalt','teal','sky','azure'],green:['green','olive','sage','forest','mint'],red:['red','burgundy','maroon','wine','crimson'],orange:['orange','rust','terracotta','coral'],yellow:['yellow','mustard','gold'],purple:['purple','lavender','lilac','violet'],pink:['pink','rose','blush']};
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,Number(n)||0));
 const uid=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const title=s=>String(s||'').replace(/(^|[\s-])([a-z])/g,(m,p,c)=>p+c.toUpperCase());
+
 function status(show,label='',pct=0,sub=''){let e=$('#aiScanStatus');if(!e){e=document.createElement('div');e.id='aiScanStatus';e.className='scan-status';e.hidden=true;e.innerHTML='<div class="scan-card"><div class="scan-spinner"></div><div class="scan-copy"><strong id="aiScanLabel"></strong><span id="aiScanSub"></span></div><div class="scan-track"><span id="aiScanBar"></span></div></div>';document.body.appendChild(e)}e.hidden=!show;if(show){$('#aiScanLabel').textContent=label;$('#aiScanSub').textContent=sub;$('#aiScanBar').style.width=`${clamp(pct/100)*100}%`}}
+
 function timeout(p,ms,msg){let t;return Promise.race([p,new Promise((_,r)=>t=setTimeout(()=>r(new Error(msg)),ms))]).finally(()=>clearTimeout(t))}
-async function loadAI(){if((removeBackground||classifier)&&aiLoadPromise===null)return true;if(aiLoadPromise)return aiLoadPromise;aiLoadPromise=(async()=>{status(true,'Preparing vision…',8,'Starting the local vision engine.');const r=await Promise.allSettled([import(BG_URL),import(TF_URL)]);const bg=r[0].status==='fulfilled'?r[0].value:null,tf=r[1].status==='fulfilled'?r[1].value:null;if(bg){removeBackground=bg.removeBackground||bg.default||null;segmentForeground=bg.segmentForeground||null}if(tf){try{status(true,'Preparing garment recognition…',20,'Loading recognition only once per session.');classifier=await timeout(tf.pipeline('zero-shot-image-classification',MODEL,perf().classifierOptions()),perf().lowPower?60000:90000,'Garment recognition timed out')}catch(e){console.warn('Dolapy classifier unavailable:',e);classifier=null}}if(!removeBackground&&!segmentForeground&&!classifier)throw new Error('Vision modules could not be loaded');return true})().catch(e=>{aiLoadPromise=null;throw e});return aiLoadPromise}
-window.warmDolapyAI=()=>loadAI().catch(e=>console.warn('Dolapy AI warmup failed:',e));
+
+async function loadAI(){
+  // Already loaded successfully
+  if(aiLoadPromise&&aiLoadPromise!==true)return aiLoadPromise;
+  if(aiLoadPromise===true)return true;
+  aiLoadPromise=(async()=>{
+    status(true,'Preparing vision…',8,'Starting the local vision engine.');
+    const r=await Promise.allSettled([import(BG_URL),import(TF_URL)]);
+    const bg=r[0].status==='fulfilled'?r[0].value:null;
+    const tf=r[1].status==='fulfilled'?r[1].value:null;
+    let bgLoaded=false;
+    if(bg){
+      removeBackground=bg.removeBackground||bg.default||null;
+      segmentForeground=bg.segmentForeground||null;
+      bgLoaded=!!(removeBackground||segmentForeground);
+      console.log('[Dolapy] BG module loaded. removeBackground:',typeof removeBackground,'segmentForeground:',typeof segmentForeground);
+    } else {
+      console.warn('[Dolapy] BG module failed to load:',r[0].reason);
+    }
+    let classifierLoaded=false;
+    if(tf){
+      try{
+        status(true,'Preparing garment recognition…',20,'Loading recognition only once per session.');
+        classifier=await timeout(tf.pipeline('zero-shot-image-classification',MODEL,perf().classifierOptions()),perf().lowPower?60000:90000,'Garment recognition timed out');
+        classifierLoaded=true;
+      }catch(e){console.warn('[Dolapy] Classifier unavailable:',e);classifier=null}
+    } else {
+      console.warn('[Dolapy] Transformers module failed:',r[1].reason);
+    }
+    if(!bgLoaded&&!classifierLoaded)throw new Error('Vision modules could not be loaded. Check network and try again.');
+    console.log('[Dolapy] AI ready. bgLoaded:',bgLoaded,'classifierLoaded:',classifierLoaded);
+    return true;
+  })().catch(e=>{aiLoadPromise=null;throw e});
+  return aiLoadPromise;
+}
+
+window.warmDolapyAI=()=>loadAI().catch(e=>console.warn('[Dolapy] AI warmup failed:',e));
+
 function readFile(file){return new Promise((res,rej)=>{const r=new FileReader();r.onerror=()=>rej(new Error('Could not read the image'));r.onload=()=>res(r.result);r.readAsDataURL(file)})}
 function imageFromSource(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Could not decode the image'));i.src=src})}
-async function normalizeImage(input,maxSize){const max=maxSize||Math.max(768,perf().imageSize?.()||768);let source=input;let bitmap=null;if(typeof createImageBitmap==='function'&&input instanceof Blob){try{bitmap=await createImageBitmap(input,{imageOrientation:'from-image'});}catch{bitmap=null}}if(bitmap){const scale=Math.min(1,max/Math.max(bitmap.width||1,bitmap.height||1)),c=document.createElement('canvas');c.width=Math.max(1,Math.round((bitmap.width||1)*scale));c.height=Math.max(1,Math.round((bitmap.height||1)*scale));const x=c.getContext('2d',{alpha:false});if(!x){bitmap.close?.();throw new Error('Canvas unavailable')}x.drawImage(bitmap,0,0,c.width,c.height);bitmap.close?.();return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Image encoding failed')),'image/jpeg',.9))}const src=typeof source==='string'?source:await readFile(source),im=await imageFromSource(src),scale=Math.min(1,max/Math.max(im.naturalWidth||1,im.naturalHeight||1)),c=document.createElement('canvas');c.width=Math.max(1,Math.round((im.naturalWidth||1)*scale));c.height=Math.max(1,Math.round((im.naturalHeight||1)*scale));const x=c.getContext('2d',{alpha:false});if(!x)throw new Error('Canvas unavailable');x.drawImage(im,0,0,c.width,c.height);return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Image encoding failed')),'image/jpeg',.9))}
-async function captureBlob(){const v=$('#cameraVideo');if(!v?.videoWidth)throw new Error('Camera is not ready yet');const max=perf().lowPower?768:1024,s=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight)),c=$('#cameraCanvas')||document.createElement('canvas');c.width=Math.max(1,Math.round(v.videoWidth*s));c.height=Math.max(1,Math.round(v.videoHeight*s));const x=c.getContext('2d',{alpha:false});if(!x)throw new Error('Camera canvas unavailable');x.drawImage(v,0,0,c.width,c.height);return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Camera capture failed')),'image/jpeg',.92))}
-async function startCamera(){const modal=$('#cameraModal'),v=$('#cameraVideo');if(!modal||!v)return;try{stopCamera();if(!navigator.mediaDevices?.getUserMedia)throw new Error('Live camera is not supported here');cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:1280},frameRate:{ideal:30,max:30}},audio:false});v.srcObject=cameraStream;v.muted=true;v.playsInline=true;modal.hidden=false;$('#cameraHint').textContent='Keep one piece fully visible. Plain background gives the best cutout.';window.warmDolapyAI?.();await v.play().catch(()=>{})}catch(e){console.warn('Live camera unavailable:',e);stopCamera();modal.hidden=false;$('#cameraHint').textContent='Live camera is unavailable. Choose a photo from your device instead.';$('#aiFileInput')?.click()}}
-function stopCamera(){cameraStream?.getTracks?.().forEach(t=>t.stop());cameraStream=null;const v=$('#cameraVideo');if(v)v.srcObject=null}
+
+async function normalizeImage(input,maxSize){
+  const max=maxSize||Math.max(768,perf().imageSize?.()||768);
+  let bitmap=null;
+  // For Blob/File: use createImageBitmap with EXIF orientation correction
+  if(typeof createImageBitmap==='function'&&(input instanceof Blob||input instanceof File)){
+    try{
+      bitmap=await createImageBitmap(input,{imageOrientation:'from-image'});
+    }catch(ex){
+      console.warn('[Dolapy] createImageBitmap failed, falling back:',ex);
+      bitmap=null;
+    }
+  }
+  if(bitmap){
+    const scale=Math.min(1,max/Math.max(bitmap.width||1,bitmap.height||1));
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round((bitmap.width||1)*scale));
+    c.height=Math.max(1,Math.round((bitmap.height||1)*scale));
+    const x=c.getContext('2d',{alpha:false});
+    if(!x){bitmap.close?.();throw new Error('Canvas unavailable')}
+    x.drawImage(bitmap,0,0,c.width,c.height);
+    bitmap.close?.();
+    console.log('[Dolapy] normalizeImage (bitmap path): output',c.width,'x',c.height);
+    return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Image encoding failed')),'image/jpeg',.9));
+  }
+  // Fallback: load via <img> element
+  const src=typeof input==='string'?input:await readFile(input);
+  const im=await imageFromSource(src);
+  const scale=Math.min(1,max/Math.max(im.naturalWidth||1,im.naturalHeight||1));
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round((im.naturalWidth||1)*scale));
+  c.height=Math.max(1,Math.round((im.naturalHeight||1)*scale));
+  const x=c.getContext('2d',{alpha:false});
+  if(!x)throw new Error('Canvas unavailable');
+  x.drawImage(im,0,0,c.width,c.height);
+  console.log('[Dolapy] normalizeImage (img fallback path): output',c.width,'x',c.height);
+  return new Promise((res,rej)=>c.toBlob(b=>b?res(b):rej(new Error('Image encoding failed')),'image/jpeg',.9));
+}
+
+// Validate that a blob actually has transparent pixels (BG removal succeeded)
+// Returns fraction of transparent pixels (0-1). Values near 0 = BG removal failed.
+async function measureTransparency(blob){
+  try{
+    const im=await imageFromSource(await readFile(blob));
+    const size=Math.min(120,im.naturalWidth||120,im.naturalHeight||120);
+    const c=document.createElement('canvas');
+    c.width=c.height=size;
+    const x=c.getContext('2d',{willReadFrequently:true});
+    if(!x)return 0;
+    x.drawImage(im,0,0,size,size);
+    const d=x.getImageData(0,0,size,size).data;
+    let transparent=0;
+    for(let i=3;i<d.length;i+=4){if(d[i]<64)transparent++}
+    const ratio=transparent/(d.length/4);
+    console.log('[Dolapy] Transparency check:',Math.round(ratio*100)+'% transparent pixels');
+    return ratio;
+  }catch{return 0}
+}
+
+async function maskComposite(original,mask){
+  const src=await imageFromSource(await readFile(original));
+  const msk=await imageFromSource(await readFile(mask));
+  const w=src.naturalWidth||src.width,h=src.naturalHeight||src.height;
+  const mc=document.createElement('canvas'),oc=document.createElement('canvas');
+  mc.width=oc.width=w;mc.height=oc.height=h;
+  const mx=mc.getContext('2d',{willReadFrequently:true}),ox=oc.getContext('2d',{alpha:true});
+  if(!mx||!ox)throw new Error('Canvas unavailable for mask compositing');
+  mx.drawImage(msk,0,0,w,h);
+  ox.drawImage(src,0,0,w,h);
+  const md=mx.getImageData(0,0,w,h).data,od=ox.getImageData(0,0,w,h),px=od.data;
+  for(let i=0,p=0;i<px.length;i+=4,p+=1){
+    const r=md[i],g=md[i+1],b=md[i+2],a=md[i+3];
+    const lum=(r+g+b)/3;
+    const m=a<245&&a>0?a:lum;
+    let alpha=m<26?0:m>238?255:m;
+    if(alpha>0&&alpha<145){
+      let strong=0;
+      const x=p%w,y=Math.floor(p/w);
+      for(let yy=-1;yy<=1;yy++)for(let xx=-1;xx<=1;xx++){
+        if(!xx&&!yy)continue;
+        const nx=x+xx,ny=y+yy;
+        if(nx<0||ny<0||nx>=w||ny>=h)continue;
+        const q=(ny*w+nx)*4,qr=md[q],qg=md[q+1],qb=md[q+2],qa=md[q+3],qm=qa<245&&qa>0?qa:(qr+qg+qb)/3;
+        if(qm>205)strong++;
+      }
+      if(strong===0&&alpha<100)alpha=0;
+    }
+    // ONLY modify alpha. RGB from original is untouched.
+    px[i+3]=Math.round(alpha);
+  }
+  return new Promise((res,rej)=>oc.toBlob(b=>b?res(b):rej(new Error('Cutout encoding failed')),'image/png',1));
+}
+
+// Throws if background removal fails. Never silently returns original.
+async function cleanCutout(blob){
+  if(!removeBackground&&!segmentForeground){
+    throw new Error('Background removal module not loaded');
+  }
+  const model=perf().segmentationModel?.()||'isnet_fp16';
+  const device=navigator.gpu?'gpu':'cpu';
+  console.log('[Dolapy] BG removal start. model:',model,'device:',device,'segmentForeground available:',typeof segmentForeground);
+
+  let result=null;
+
+  if(segmentForeground){
+    // Two-pass: get mask, then composite preserving original RGB
+    const mask=await timeout(
+      segmentForeground(blob,{device,model,output:{format:'image/png',quality:1}}),
+      perf().lowPower?90000:60000,
+      'Background mask timed out'
+    );
+    result=await maskComposite(blob,mask);
+  } else {
+    // removeBackground returns a transparent PNG directly
+    result=await timeout(
+      removeBackground(blob,{device,model,output:{format:'image/png',quality:1}}),
+      perf().lowPower?90000:60000,
+      'Background removal timed out'
+    );
+  }
+
+  if(!result)throw new Error('Background removal returned empty result');
+
+  // Validate the result actually has transparent pixels
+  const transparency=await measureTransparency(result);
+  if(transparency<0.05){
+    console.warn('[Dolapy] BG removal validation failed: only',Math.round(transparency*100)+'% transparent. Model may have failed silently.');
+    throw new Error('Background removal did not produce a transparent cutout ('+Math.round(transparency*100)+'% transparent)');
+  }
+
+  console.log('[Dolapy] BG removal succeeded. Transparency:',Math.round(transparency*100)+'%');
+  return result;
+}
+
 function hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,s=d?d/(1-Math.abs(2*l-1)):0;let h=0;if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h=(h*60+360)%360}return{h,s,l,v:mx}}
 function colorName(r,g,b){const{h,s,l,v}=hsl(r,g,b);if(v<.16)return'black';if(v<.28&&s<.28)return'charcoal';if(l>.92&&s<.13)return'white';if(l>.82&&s<.24)return'cream';if(s<.1&&l<.7)return'grey';if(s<.2&&l>=.7)return'beige';if(l<.42&&h>=15&&h<45&&s>.22)return'brown';if(h>=345||h<12)return l<.45?'burgundy':'red';if(h<42)return l<.42?'rust':'orange';if(h<72)return l<.45?'mustard':'yellow';if(h<160)return l<.45?'olive':'green';if(h<255)return l<.42?'navy':'blue';if(h<310)return l<.46?'purple':'lavender';return l<.5?'rose':'pink'}
 const family=n=>{const s=String(n||'').toLowerCase();for(const[k,w]of Object.entries(COLORS))if(w.some(x=>s.includes(x)))return k;return'unknown'};
-async function maskComposite(original,mask){const src=await imageFromSource(await readFile(original)),msk=await imageFromSource(await readFile(mask)),w=src.naturalWidth||src.width,h=src.naturalHeight||src.height,mc=document.createElement('canvas'),oc=document.createElement('canvas');mc.width=oc.width=w;mc.height=oc.height=h;const mx=mc.getContext('2d',{willReadFrequently:true}),ox=oc.getContext('2d',{alpha:true});if(!mx||!ox)throw new Error('Canvas unavailable for mask compositing');mx.drawImage(msk,0,0,w,h);ox.drawImage(src,0,0,w,h);const md=mx.getImageData(0,0,w,h).data,od=ox.getImageData(0,0,w,h),px=od.data;for(let i=0,p=0;i<px.length;i+=4,p+=1){const r=md[i],g=md[i+1],b=md[i+2],a=md[i+3],lum=(r+g+b)/3,m=a<245&&a>0?a:lum;let alpha=m<26?0:m>238?255:m;if(alpha>0&&alpha<145){let strong=0;const x=p%w,y=Math.floor(p/w);for(let yy=-1;yy<=1;yy++)for(let xx=-1;xx<=1;xx++){if(!xx&&!yy)continue;const nx=x+xx,ny=y+yy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const q=(ny*w+nx)*4,qr=md[q],qg=md[q+1],qb=md[q+2],qa=md[q+3],qm=qa<245&&qa>0?qa:(qr+qg+qb)/3;if(qm>205)strong++}if(strong===0&&alpha<100)alpha=0}px[i+3]=Math.round(alpha)}const out=new Promise((res,rej)=>oc.toBlob(b=>b?res(b):rej(new Error('Cutout encoding failed')),'image/png',1));return out}
-async function cleanCutout(blob){if(!removeBackground&&!segmentForeground)return blob;const model=perf().segmentationModel?.()||'isnet_fp16';try{status(true,'Removing background…',40,navigator.gpu?'Using WebGPU acceleration.':'Using local CPU fallback.');if(segmentForeground){const mask=await timeout(segmentForeground(blob,{device:navigator.gpu?'gpu':'cpu',model,output:{format:'image/png',quality:1}}),perf().lowPower?120000:90000,'Background mask timed out');return await maskComposite(blob,mask)}const result=await timeout(removeBackground(blob,{device:navigator.gpu?'gpu':'cpu',model,output:{format:'image/png',quality:1}}),perf().lowPower?120000:90000,'Background removal timed out');return result||blob}catch(e){console.warn('Dolapy background removal failed; keeping original photo:',e);return blob}}
-async function detectColor(blob){try{const im=await imageFromSource(await readFile(blob)),c=document.createElement('canvas');c.width=c.height=72;const x=c.getContext('2d',{willReadFrequently:true});if(!x)return{name:'',family:''};x.drawImage(im,0,0,72,72);const d=x.getImageData(6,6,60,60).data,b=new Map;for(let i=0;i<d.length;i+=4){if(d[i+3]<100)continue;const r=d[i],g=d[i+1],bl=d[i+2],v=hsl(r,g,bl);if(v.v>.975&&v.s<.08)continue;const k=`${Math.round(r/20)*20},${Math.round(g/20)*20},${Math.round(bl/20)*20}`,e=b.get(k)||{w:0,r:0,g:0,b:0},ww=.7+Math.min(1,v.s*1.4);e.w+=ww;e.r+=r*ww;e.g+=g*ww;e.b+=bl*ww;b.set(k,e)}const top=[...b.values()].sort((a,z)=>z.w-a.w)[0];if(!top)return{name:'',family:''};const n=colorName(top.r/top.w,top.g/top.w,top.b/top.w);return{name:n,family:family(n)}}catch{return{name:'',family:''}}}
+
+async function detectColor(blob){
+  try{
+    const im=await imageFromSource(await readFile(blob));
+    const c=document.createElement('canvas');
+    c.width=c.height=72;
+    const x=c.getContext('2d',{willReadFrequently:true});
+    if(!x)return{name:'',family:''};
+    x.drawImage(im,0,0,72,72);
+    const d=x.getImageData(6,6,60,60).data,b=new Map;
+    for(let i=0;i<d.length;i+=4){
+      if(d[i+3]<100)continue; // skip transparent pixels (background already removed)
+      const r=d[i],g=d[i+1],bl=d[i+2],v=hsl(r,g,bl);
+      if(v.v>.975&&v.s<.08)continue;
+      const k=`${Math.round(r/20)*20},${Math.round(g/20)*20},${Math.round(bl/20)*20}`;
+      const e=b.get(k)||{w:0,r:0,g:0,b:0};
+      const ww=.7+Math.min(1,v.s*1.4);
+      e.w+=ww;e.r+=r*ww;e.g+=g*ww;e.b+=bl*ww;
+      b.set(k,e);
+    }
+    const top=[...b.values()].sort((a,z)=>z.w-a.w)[0];
+    if(!top)return{name:'',family:''};
+    const n=colorName(top.r/top.w,top.g/top.w,top.b/top.w);
+    return{name:n,family:family(n)};
+  }catch{return{name:'',family:''}}
+}
+
 const categoryFromText=t=>{const s=String(t||'').toLowerCase();if(/dress/.test(s))return'dresses';if(/jeans|trouser|cargo|chino|shorts|skirt|pants/.test(s))return'bottoms';if(/sneaker|boot|loafer|sandal|heel|slide/.test(s))return'shoes';if(/jacket|coat|blazer|overshirt|hoodie|sweater|cardigan|suit/.test(s))return'outerwear';if(/bag|backpack|cap|hat|belt|watch|scarf|glasses/.test(s))return'accessories';return'tops'};
 const styleFromText=t=>{const s=String(t||'').toLowerCase();if(/cargo|hoodie|jacket|overshirt|graphic|wide-leg/.test(s))return'streetwear';if(/blazer|loafer|oxford|suit|tailored|formal/.test(s))return'smart';if(/sport|running|trainer|gym|athletic/.test(s))return'athletic';if(/utility|workwear/.test(s))return'utility';if(/vintage|retro|heritage|washed/.test(s))return'vintage';if(/polo|classic|varsity/.test(s))return'preppy';if(/minimal|plain|clean/.test(s))return'minimal';return'casual'};
 const silhouetteFromText=t=>{const s=String(t||'').toLowerCase();if(/oversized|boxy|baggy/.test(s))return'oversized';if(/wide[- ]leg|wide|relaxed/.test(s))return'relaxed';if(/slim|skinny|tapered|fitted/.test(s))return'slim';return'regular'};
+
 async function classify(blob){if(!classifier)return[];const u=URL.createObjectURL(blob);try{return await timeout(classifier(u,LABELS),perf().lowPower?30000:45000)||[]}finally{URL.revokeObjectURL(u)}}
 const filenameMeta=f=>{const text=f?.name?.replace(/\.[^/.]+$/,'').replace(/[-_]+/g,' ').trim()||'';return{text,category:categoryFromText(text),style:styleFromText(text),silhouette:silhouetteFromText(text)}};
-async function analyse(file){if(!file)throw new Error('No image supplied');status(true,'Preparing your photo…',22,'Optimizing the camera image.');const normalized=await normalizeImage(file),fallback=filenameMeta(file);try{await loadAI()}catch(e){console.warn('Vision unavailable:',e)}const cutout=await cleanCutout(normalized);let results=[];if(classifier){status(true,'Identifying the piece…',62,'Reading garment type and style.');try{results=await classify(cutout)}catch(e){console.warn('Cutout recognition failed:',e);try{results=await classify(normalized)}catch{}}}const best=results[0]||{label:'',score:0},label=best.label||'',text=`${label} ${fallback.text}`.trim(),category=label&&Number(best.score||0)>=.08?categoryFromText(label):fallback.category,style=styleFromText(text),silhouette=silhouetteFromText(text);status(true,'Reading color…',80,'Analyzing the isolated garment.');const color=await detectColor(cutout),lower=text.toLowerCase(),season=/linen|tank|shorts|sandal|summer|tee/.test(lower)?'summer':/wool|coat|puffer|fleece|thermal|winter|knit/.test(lower)?'winter':'all',confidence=clamp(Number(best.score||0)),data=await readFile(cutout);return{id:uid(),name:title([color.name||'',style!=='casual'?style:'',title(label||(category==='tops'?'T-Shirt':category==='bottoms'?'Bottoms':category))].filter(Boolean).join(' ')),image:data,category,color:color.name||'neutral',colorFamily:color.family,style,season,occasion:style==='smart'?'smart':style==='athletic'?'sport':'everyday',silhouette,pattern:/stripe/.test(lower)?'stripe':/check|plaid/.test(lower)?'check':/graphic|print/.test(lower)?'graphic':'solid',warmth:category==='outerwear'?4:category==='shoes'?2:season==='summer'?1:season==='winter'?4:3,formality:style==='smart'?4:style==='preppy'?3:style==='athletic'?1:2,wearCount:0,favorite:false,aiIdentified:Boolean(label),visualConfidence:confidence,recognitionMargin:results[1]?clamp(confidence-Number(results[1].score||0)):confidence,aiAlternatives:results.slice(0,4).map(x=>({label:x.label,score:Number(x.score||0)})),metadataConfidence:clamp(confidence*.65+(color.name?.25:.08)+.1),createdAt:Date.now()}}
-function openResult(item){current=item;const p=$('#previewImg');if(p)p.src=item.image;$('#fName').value=item.name;$('#fCategory').value=item.category;$('#fColor').value=item.color;$('#fStyle').value=item.style;$('#queueInfo').textContent=queue.length?`${queue.length} more piece${queue.length===1?'':'s'} to review`:`AI confidence ${Math.round((item.metadataConfidence||0)*100)}%`;$('#modal').hidden=false}
+
+async function analyse(file){
+  if(!file)throw new Error('No image supplied');
+  status(true,'Preparing your photo…',22,'Optimizing the camera image.');
+  const normalized=await normalizeImage(file);
+  const fallback=filenameMeta(file);
+
+  try{await loadAI()}catch(e){console.warn('[Dolapy] Vision unavailable:',e)}
+
+  // Attempt background removal — explicit failure path
+  let cutout=null;
+  let bgRemoved=false;
+  if(removeBackground||segmentForeground){
+    status(true,'Removing background…',38,'Isolating the garment from the photo.');
+    try{
+      cutout=await cleanCutout(normalized);
+      bgRemoved=true;
+    }catch(e){
+      console.warn('[Dolapy] Background removal failed:',e.message);
+      // Do NOT silently fall back. Tell the user and use original for classification only.
+      cutout=null;
+    }
+  }
+
+  // If background removal failed, we still try to classify the original
+  // but we store the ORIGINAL photo (with background) and flag the issue
+  const imageForClassification=cutout||normalized;
+
+  let results=[];
+  if(classifier){
+    status(true,'Identifying the piece…',62,'Reading garment type and style.');
+    try{results=await classify(imageForClassification)}catch(e){
+      console.warn('[Dolapy] Classification on cutout failed, retrying on original:',e);
+      try{results=await classify(normalized)}catch{}
+    }
+  }
+
+  const best=results[0]||{label:'',score:0};
+  const label=best.label||'';
+  const text=`${label} ${fallback.text}`.trim();
+  const category=label&&Number(best.score||0)>=.08?categoryFromText(label):fallback.category;
+  const style=styleFromText(text);
+  const silhouette=silhouetteFromText(text);
+
+  status(true,'Reading color…',80,'Analyzing garment color.');
+  const color=await detectColor(imageForClassification);
+  const lower=text.toLowerCase();
+  const season=/linen|tank|shorts|sandal|summer|tee/.test(lower)?'summer':/wool|coat|puffer|fleece|thermal|winter|knit/.test(lower)?'winter':'all';
+  const confidence=clamp(Number(best.score||0));
+
+  // Use the cutout if available, otherwise use the original normalized image
+  // This is INTENTIONAL — user can see clearly whether background was removed
+  const imageData=await readFile(cutout||normalized);
+
+  const item={
+    id:uid(),
+    name:title([color.name||'',style!=='casual'?style:'',title(label||(category==='tops'?'T-Shirt':category==='bottoms'?'Bottoms':category))].filter(Boolean).join(' ')),
+    image:imageData,
+    category,
+    color:color.name||'neutral',
+    colorFamily:color.family,
+    style,
+    season,
+    occasion:style==='smart'?'smart':style==='athletic'?'sport':'everyday',
+    silhouette,
+    pattern:/stripe/.test(lower)?'stripe':/check|plaid/.test(lower)?'check':/graphic|print/.test(lower)?'graphic':'solid',
+    warmth:category==='outerwear'?4:category==='shoes'?2:season==='summer'?1:season==='winter'?4:3,
+    formality:style==='smart'?4:style==='preppy'?3:style==='athletic'?1:2,
+    wearCount:0,
+    favorite:false,
+    aiIdentified:Boolean(label),
+    backgroundRemoved:bgRemoved,
+    visualConfidence:confidence,
+    recognitionMargin:results[1]?clamp(confidence-Number(results[1].score||0)):confidence,
+    aiAlternatives:results.slice(0,4).map(x=>({label:x.label,score:Number(x.score||0)})),
+    metadataConfidence:clamp(confidence*.65+(color.name?.25:.08)+.1),
+    createdAt:Date.now()
+  };
+
+  if(!bgRemoved){
+    // Surface the failure clearly in the confirmation modal subtitle
+    item._bgWarning='Background could not be removed for this photo. The original photo was saved.';
+  }
+
+  return item;
+}
+
+function openResult(item){
+  current=item;
+  const p=$('#previewImg');
+  if(p)p.src=item.image;
+  $('#fName').value=item.name;
+  $('#fCategory').value=item.category;
+  $('#fColor').value=item.color;
+  $('#fStyle').value=item.style;
+  let info='';
+  if(item._bgWarning){
+    info=item._bgWarning;
+  } else if(queue.length){
+    info=`${queue.length} more piece${queue.length===1?'':'s'} to review`;
+  } else {
+    info=`AI confidence ${Math.round((item.metadataConfidence||0)*100)}%`+(item.backgroundRemoved?' · Background removed':'');
+  }
+  $('#queueInfo').textContent=info;
+  $('#modal').hidden=false;
+}
+
 function closeResult(){current=null;queue=[];$('#modal').hidden=true;status(false)}
 function next(){if(queue.length)openResult(queue.shift());else closeResult()}
-function save(){if(!current)return;current.name=String($('#fName').value||'').trim()||current.name;current.category=$('#fCategory').value;current.color=String($('#fColor').value||'').trim()||current.color;current.style=$('#fStyle').value;current.formality=current.style==='smart'?4:current.style==='preppy'?3:current.style==='athletic'?1:2;let items=[];try{items=JSON.parse(localStorage.getItem(STORE)||'[]')}catch{}if(!Array.isArray(items))items=[];items.unshift(current);try{localStorage.setItem(STORE,JSON.stringify(items))}catch{alert('Wardrobe storage is full. Remove an older piece first.');return}current=null;if(queue.length)next();else{status(false);$('#modal').hidden=true;window.renderAll?.();window.DolapyIntelligence?.refresh?.();window.DolapyContext?.render?.();window.DolapyEngineV3?.generate?.()}}
-async function startAIUpload(files){const list=[...(files||[])].filter(f=>f?.type?.startsWith('image/'));if(!list.length)return;queue=[];current=null;try{for(let i=0;i<list.length;i++){status(true,`Processing piece ${i+1} of ${list.length}…`,5,'Your original photo stays local.');try{queue.push(await analyse(list[i]))}catch(e){console.error('Dolapy vision item failed:',e);try{const n=await normalizeImage(list[i]),m=filenameMeta(list[i]);queue.push({id:uid(),name:title(m.text||'Untitled item'),image:await readFile(n),category:m.category,color:'neutral',colorFamily:'neutral',style:m.style,season:'all',occasion:m.style==='smart'?'smart':'everyday',silhouette:m.silhouette,pattern:'solid',warmth:m.category==='outerwear'?4:3,formality:m.style==='smart'?4:2,wearCount:0,favorite:false,aiIdentified:false,visualConfidence:0,recognitionMargin:0,aiAlternatives:[],metadataConfidence:.15,createdAt:Date.now()})}catch(fe){console.error('Dolapy fallback also failed:',fe)}}}status(false);if(queue.length)openResult(queue.shift());else throw new Error('No usable images were produced')}catch(e){console.error('Dolapy upload failed:',e);status(false);alert('Dolapy could not process that photo. Please try another photo with the whole garment visible.');closeCamera();closeResult()}}
-function closeCamera(){stopCamera();const m=$('#cameraModal');if(m)m.hidden=true}
-function wire(){['#addHeroAI','#addWardrobeAI','#bottomAddAI'].forEach(s=>$(s)?.addEventListener('click',()=>startCamera()));$('#closeCamera')?.addEventListener('click',closeCamera);$('#cameraGallery')?.addEventListener('click',()=>$('#aiFileInput')?.click());$('#capturePhoto')?.addEventListener('click',async()=>{const b=$('#capturePhoto');if(!cameraStream){$('#aiFileInput')?.click();return}b.disabled=true;try{const blob=await captureBlob();closeCamera();await startAIUpload([new File([blob],`dolapy-camera-${Date.now()}.jpg`,{type:'image/jpeg'})])}catch(e){console.error('Camera capture failed:',e);alert('The camera photo could not be captured. Please try again or choose a photo from your device.')}finally{b.disabled=false}});$('#aiFileInput')?.addEventListener('change',e=>{const files=[...(e.target.files||[])];e.target.value='';closeCamera();if(files.length)startAIUpload(files)});$('#closeModal')?.addEventListener('click',closeResult);$('#saveItem')?.addEventListener('click',save);window.addEventListener('beforeunload',stopCamera);document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#cameraModal')?.hidden)closeCamera();else if(!$('#modal')?.hidden)closeResult()}})}
-window.startCamera=startCamera;window.stopCamera=stopCamera;window.startAIUpload=startAIUpload;window.DolapyVision={analyse,startCamera,stopCamera,startAIUpload,warm:()=>window.warmDolapyAI?.()};
+function save(){
+  if(!current)return;
+  current.name=String($('#fName').value||'').trim()||current.name;
+  current.category=$('#fCategory').value;
+  current.color=String($('#fColor').value||'').trim()||current.color;
+  current.style=$('#fStyle').value;
+  current.formality=current.style==='smart'?4:current.style==='preppy'?3:current.style==='athletic'?1:2;
+  let items=[];
+  try{items=JSON.parse(localStorage.getItem(STORE)||'[]')}catch{}
+  if(!Array.isArray(items))items=[];
+  items.unshift(current);
+  try{localStorage.setItem(STORE,JSON.stringify(items))}catch{alert('Wardrobe storage is full. Remove an older piece first.');return}
+  current=null;
+  if(queue.length)next();else{status(false);$('#modal').hidden=true;window.renderAll?.();window.DolapyIntelligence?.refresh?.();window.DolapyContext?.render?.();window.DolapyEngineV3?.generate?.()}
+}
+
+async function startAIUpload(files){
+  const list=[...(files||[])].filter(f=>f?.type?.startsWith('image/'));
+  if(!list.length)return;
+  queue=[];current=null;
+  try{
+    for(let i=0;i<list.length;i++){
+      status(true,`Processing piece ${i+1} of ${list.length}…`,5,'Your original photo stays local.');
+      try{
+        queue.push(await analyse(list[i]));
+      }catch(e){
+        console.error('[Dolapy] Vision item failed:',e);
+        try{
+          const n=await normalizeImage(list[i]);
+          const m=filenameMeta(list[i]);
+          queue.push({id:uid(),name:title(m.text||'Untitled item'),image:await readFile(n),category:m.category,color:'neutral',colorFamily:'neutral',style:m.style,season:'all',occasion:m.style==='smart'?'smart':'everyday',silhouette:m.silhouette,pattern:'solid',warmth:m.category==='outerwear'?4:3,formality:m.style==='smart'?4:2,wearCount:0,favorite:false,aiIdentified:false,backgroundRemoved:false,visualConfidence:0,recognitionMargin:0,aiAlternatives:[],metadataConfidence:.1,createdAt:Date.now(),_bgWarning:'Could not analyze this photo. The original was saved without background removal.'});
+        }catch(fe){console.error('[Dolapy] Fallback also failed:',fe)}
+      }
+    }
+    status(false);
+    if(queue.length)openResult(queue.shift());
+    else throw new Error('No usable images were produced');
+  }catch(e){
+    console.error('[Dolapy] Upload failed:',e);
+    status(false);
+    alert('Dolapy could not process that photo. Please try another photo with the whole garment visible.');
+    closeResult();
+  }
+}
+
+// NOTE: remote-vision.js owns ALL event wiring for camera/upload buttons.
+// wire() here only sets up keyboard shortcuts and non-camera modal controls.
+function wire(){
+  $('#closeModal')?.addEventListener('click',closeResult);
+  $('#saveItem')?.addEventListener('click',save);
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      if(!$('#modal')?.hidden)closeResult();
+    }
+  });
+}
+
+// Expose global API for remote-vision.js and other modules
+window.startCamera=()=>window.DolapyVision?.startCamera?.();
+window.stopCamera=()=>{cameraStream?.getTracks?.().forEach(t=>t.stop());cameraStream=null;const v=$('#cameraVideo');if(v)v.srcObject=null};
+window.startAIUpload=startAIUpload;
+window.DolapyVision={analyse,startAIUpload,warm:()=>window.warmDolapyAI?.()};
+
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',wire,{once:true});else wire();
 })();
