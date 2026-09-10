@@ -32,7 +32,11 @@
             <div><div class="eyebrow green">Preferences</div><h2 id="settingsTitle">Settings.</h2></div>
             <button class="icon-button" type="button" data-close-settings aria-label="Close settings">×</button>
           </div>
-          <p class="settings-intro">Make Dolapy fit the way you dress. Your preferences are stored locally in this browser.</p>
+          <p class="settings-intro">Make Dolapy fit the way you dress. Preferences stay on this device for now.</p>
+          <section class="settings-section install-section">
+            <div class="settings-label"><strong>Dolapy on your phone</strong><span>Install Dolapy for a faster, app-like experience.</span></div>
+            <button type="button" class="install-app" id="installDolapy"><span class="install-icon"><svg><use href="#i-download"></use></svg></span><span><b id="installTitle">Install Dolapy</b><small id="installHint">Add Dolapy to your home screen.</small></span><span class="install-arrow">›</span></button>
+          </section>
           <section class="settings-section">
             <div class="settings-label"><strong>Styling</strong><span>How Dolapy should start each edit.</span></div>
             <label class="settings-row"><span><b>Default occasion</b><small>Used when you start a new styling session.</small></span><select id="settingsOccasion"><option value="everyday">Everyday</option><option value="smart">Smart</option><option value="date">Date</option><option value="travel">Travel</option><option value="sport">Sport</option></select></label>
@@ -59,8 +63,10 @@
       $('#settingsMotion').addEventListener('change', apply);
       $('#settingsDelete').addEventListener('change', apply);
       $('#settingsReset').addEventListener('click', () => { settings = { ...defaults }; save(); sync(); applyEffects(); });
+      $('#installDolapy').addEventListener('click', installApp);
     }
     sync();
+    syncInstall();
     wrap.hidden = false;
     document.body.classList.add('settings-open');
     $('#settingsOccasion')?.focus();
@@ -80,6 +86,24 @@
     $('#settingsAIStatus').checked = settings.showAIStatus;
     $('#settingsMotion').checked = settings.reduceMotion;
     $('#settingsDelete').checked = settings.confirmBeforeDelete;
+  }
+
+  function syncInstall() {
+    const button = $('#installDolapy');
+    const title = $('#installTitle');
+    const hint = $('#installHint');
+    if (!button || !title || !hint) return;
+    const installed = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (installed) { title.textContent = 'Dolapy is installed'; hint.textContent = 'You are already using the app from your home screen.'; button.disabled = true; return; }
+    const available = window.DolapyPWA?.canInstall?.();
+    button.disabled = !available;
+    title.textContent = available ? 'Install Dolapy' : 'Add Dolapy to your phone';
+    hint.textContent = available ? 'Install it like an app from this screen.' : 'Use your browser menu and choose “Add to Home Screen” or “Install app”.';
+  }
+
+  async function installApp() {
+    const installed = await window.DolapyPWA?.install?.();
+    if (installed) syncInstall();
   }
 
   function apply() {
@@ -102,6 +126,7 @@
     applyEffects();
     $('.mobile-settings')?.addEventListener('click', open);
     $('.side-settings')?.addEventListener('click', open);
+    document.addEventListener('dolapy:install-state', syncInstall);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#settingsPanel') && !$('#settingsPanel').hidden) close(); });
   }
 
