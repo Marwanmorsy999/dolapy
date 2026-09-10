@@ -4,17 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171b23">
-  <meta name="description" content="Dolapy — style the clothes you already own.">
+  <meta name="description" content="Dolapy — photograph your clothes, isolate them, identify them, and style your wardrobe.">
   <title>Dolapy — Your wardrobe, styled</title>
   <link rel="stylesheet" href="styles.css">
-  <style>
-    .camera-preview{position:relative;height:min(62vh,520px);margin-top:15px;border-radius:18px;overflow:hidden;background:#0d1117;display:grid;place-items:center}
-    .camera-preview video{width:100%;height:100%;object-fit:cover}
-    .camera-hint{position:absolute;left:16px;right:16px;bottom:16px;padding:11px 13px;border-radius:12px;background:#171b23d9;color:#fff;text-align:center;font-size:12px;backdrop-filter:blur(6px)}
-    .camera-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:14px}
-    .camera-actions button{width:100%}
-    @media(max-width:520px){.camera-modal{padding:14px}.camera-preview{height:56vh;margin-top:12px}.camera-actions{grid-template-columns:1fr 1.2fr}.camera-actions button{padding:13px 10px}.camera-modal .note{font-size:10px}}
-  </style>
+  <link rel="stylesheet" href="ai.css">
 </head>
 <body>
 <div class="app">
@@ -22,23 +15,23 @@
     <div class="brand">Dolapy<b>.</b></div>
     <div class="side-note">your wardrobe,<br><em>sorted.</em></div>
     <nav>
-      <button id="navStyle" class="active">✦ <span>Style me</span></button>
-      <button id="navWardrobe">▣ <span>My wardrobe</span></button>
+      <button id="navStyle" class="active"><span class="nav-icon">✦</span><span>Style me</span></button>
+      <button id="navWardrobe"><span class="nav-icon">▣</span><span>My wardrobe</span></button>
     </nav>
-    <div class="side-foot">Local first · deterministic engine</div>
+    <div class="side-foot">AI vision · local outfit engine</div>
   </aside>
   <main class="main">
-    <header class="mobile-head"><span aria-hidden="true">☰</span><div class="brand mobile-brand">Dolapy<b>.</b></div><div class="avatar">D</div></header>
+    <header class="mobile-head"><span class="menu-icon" aria-hidden="true">☰</span><div class="brand mobile-brand">Dolapy<b>.</b></div><div class="avatar">D</div></header>
 
     <section id="stylePage" class="page">
       <div class="hero">
         <div>
           <div class="eyebrow green">Your daily edit</div>
           <h1>What are you<br><em>wearing?</em></h1>
-          <p>Take a photo of the clothes you actually own. Dolapy understands the piece, builds strong combinations, then spreads the wear across your wardrobe.</p>
+          <p>Photograph the clothes you own. Dolapy isolates each piece, identifies what it is, names it, then builds outfits around the rest of your wardrobe.</p>
           <div class="actions">
-            <button class="primary" id="addHero">📷 Take photo</button>
-            <button class="secondary dark" id="styleHero" disabled>✦ Style my wardrobe</button>
+            <button class="primary" id="addHero"><span class="btn-icon">◎</span> Take photo</button>
+            <button class="secondary dark" id="styleHero" disabled><span class="btn-icon">✦</span> Style my wardrobe</button>
           </div>
         </div>
         <div class="seal">D<br><small>DAILY<br>EDIT</small></div>
@@ -55,9 +48,9 @@
           <div>
             <div class="eyebrow">The engine</div>
             <h2>Style <em>everything</em><br>you already own.</h2>
-            <p>Hard constraints first. Then color, style, proportion, formality, context, novelty and wardrobe coverage.</p>
+            <p>AI vision identifies the piece. The outfit engine then filters bad combinations and ranks the strongest looks by color, style, proportion, formality, context, freshness and wardrobe coverage.</p>
           </div>
-          <div class="engine-chip">SMART<br>ENGINE</div>
+          <div class="engine-chip"><span>AI</span><small>STYLE<br>ENGINE</small></div>
         </div>
         <div class="pills" id="occasionPills"></div>
         <div id="engineBody"></div>
@@ -71,17 +64,17 @@
 
     <section id="wardrobePage" class="page" hidden>
       <div class="heading">
-        <div><div class="eyebrow green">Your pieces</div><h1>My <em>wardrobe.</em></h1><p>Photograph a piece, make any quick corrections, and let the engine do the rest.</p></div>
-        <button class="primary" id="addWardrobe">📷 Take photo</button>
+        <div><div class="eyebrow green">Your pieces</div><h1>My <em>wardrobe.</em></h1><p>Every photo becomes a clean cutout with an identified category, color, style and useful name.</p></div>
+        <button class="primary" id="addWardrobe"><span class="btn-icon">◎</span> Take photo</button>
       </div>
       <div class="filters" id="filters"></div>
       <div class="items" id="itemsGrid"></div>
     </section>
 
     <nav class="bottom">
-      <button id="bottomStyle" class="active">✦<span>Style</span></button>
-      <button id="bottomWardrobe">▣<span>Wardrobe</span></button>
-      <button class="add" id="bottomAdd">＋</button>
+      <button id="bottomStyle" class="active"><span class="tab-icon">✦</span><span>Style</span></button>
+      <button id="bottomWardrobe"><span class="tab-icon">▣</span><span>Wardrobe</span></button>
+      <button class="add" id="bottomAdd" aria-label="Take a photo"><span>＋</span></button>
     </nav>
   </main>
 </div>
@@ -92,37 +85,42 @@
   <div class="modal camera-modal" role="dialog" aria-modal="true" aria-labelledby="cameraTitle">
     <div class="modal-head">
       <div><div class="eyebrow green">Camera</div><h2 id="cameraTitle">Photograph this piece.</h2></div>
-      <button class="close" id="closeCamera" aria-label="Close camera">×</button>
+      <button class="close icon-button" id="closeCamera" aria-label="Close camera">×</button>
     </div>
-    <div class="camera-preview"><video id="cameraVideo" autoplay playsinline muted></video><canvas id="cameraCanvas" class="hide"></canvas><div id="cameraHint" class="camera-hint">Center one clothing piece in the frame.</div></div>
-    <div class="camera-actions">
-      <button class="secondary" id="cameraGallery">Choose from device</button>
-      <button class="primary" id="capturePhoto">● Capture photo</button>
-    </div>
-    <div class="note" id="cameraNote">Dolapy will ask for camera permission. On a phone, the rear camera is preferred.</div>
+    <div class="camera-preview"><video id="cameraVideo" autoplay playsinline muted></video><canvas id="cameraCanvas" class="hide"></canvas><div id="cameraHint" class="camera-hint">One piece in frame · uncluttered background works best.</div></div>
+    <div class="camera-actions"><button class="secondary" id="cameraGallery">▧ Choose from device</button><button class="primary" id="capturePhoto">● Capture</button></div>
+    <div class="note" id="cameraNote">Dolapy uses the rear camera when your device supports it.</div>
+  </div>
+</div>
+
+<div id="scanStatus" class="scan-status" hidden>
+  <div class="scan-card">
+    <div class="scan-spinner"></div>
+    <div class="scan-copy"><strong id="scanLabel">Preparing AI…</strong><span id="scanProgressText">Removing the background and identifying your piece.</span></div>
+    <div class="scan-track"><span id="scanProgress"></span></div>
   </div>
 </div>
 
 <div id="modal" class="modal-wrap" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-head">
-      <div><div class="eyebrow green">Quick classify</div><h2 id="modalTitle">Add this piece.</h2></div>
-      <button class="close" id="closeModal" aria-label="Close">×</button>
+      <div><div class="eyebrow green">AI identified</div><h2 id="modalTitle">Meet your piece.</h2></div>
+      <button class="close icon-button" id="closeModal" aria-label="Close">×</button>
     </div>
-    <div class="preview"><img id="previewImg" alt="Clothing preview"></div>
+    <div class="preview cutout-stage"><img id="previewImg" alt="Processed clothing cutout"></div>
+    <div class="ai-summary"><span class="ai-check">✓</span><span>Background removed</span><span class="dot">•</span><span>Identified</span><span class="dot">•</span><span>Name suggested</span></div>
     <div class="fields">
       <label>Name<input id="fName" autocomplete="off"></label>
       <label>Category<select id="fCategory"><option value="tops">Tops</option><option value="bottoms">Bottoms</option><option value="dresses">Dresses</option><option value="outerwear">Outerwear</option><option value="shoes">Shoes</option><option value="accessories">Accessories</option></select></label>
       <label>Color<input id="fColor" placeholder="navy" autocomplete="off"></label>
-      <label>Style<select id="fStyle"><option>casual</option><option>streetwear</option><option>smart</option><option>athletic</option><option>utility</option><option>minimal</option><option>vintage</option></select></label>
+      <label>Style<select id="fStyle"><option>casual</option><option>streetwear</option><option>smart</option><option>athletic</option><option>utility</option><option>minimal</option><option>vintage</option><option>preppy</option></select></label>
     </div>
-    <button class="primary full" id="saveItem">✓ Add to wardrobe</button>
+    <button class="primary full" id="saveItem"><span class="btn-icon">✓</span> Add to wardrobe</button>
     <div class="queue" id="queueInfo"></div>
-    <div class="note">Photos and wardrobe data stay in this browser. The ranking engine runs locally.</div>
+    <div class="note">Image cutout and visual recognition run in your browser. The first AI scan is heavier because the model files have to be downloaded and cached.</div>
   </div>
 </div>
 <script src="migrate.js"></script>
-<script src="app.js" defer></script>
-<script src="camera.js" defer></script>
+<script src="app-ai.js" defer></script>
 </body>
 </html>
