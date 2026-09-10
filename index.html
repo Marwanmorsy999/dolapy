@@ -29,8 +29,8 @@
           <h1>What are you<br><em>wearing?</em></h1>
           <p>Photograph the clothes you own. Dolapy removes the background, identifies the piece, names it, then builds outfits from the rest of your wardrobe.</p>
           <div class="actions">
-            <button class="primary" id="addHeroAI">📷 Take photo</button>
-            <button class="secondary dark" id="styleHero" disabled>✦ Style my wardrobe</button>
+            <button class="primary" id="addHeroAI"><span class="btn-icon">◎</span> Take photo</button>
+            <button class="secondary dark" id="styleHero" disabled><span class="btn-icon">✦</span> Style my wardrobe</button>
           </div>
         </div>
         <div class="seal">D<br><small>DAILY<br>EDIT</small></div>
@@ -60,14 +60,14 @@
     <section id="wardrobePage" class="page" hidden>
       <div class="heading">
         <div><div class="eyebrow green">Your pieces</div><h1>My <em>wardrobe.</em></h1><p>Each photo becomes an isolated piece with a suggested name, category, color and style.</p></div>
-        <button class="primary" id="addWardrobeAI">📷 Take photo</button>
+        <button class="primary" id="addWardrobeAI"><span class="btn-icon">◎</span> Take photo</button>
       </div>
       <div class="filters" id="filters"></div>
       <div class="items" id="itemsGrid"></div>
     </section>
     <nav class="bottom">
-      <button id="bottomStyle" class="active">✦<span>Style</span></button>
-      <button id="bottomWardrobe">▣<span>Wardrobe</span></button>
+      <button id="bottomStyle" class="active"><span class="tab-icon">✦</span><span>Style</span></button>
+      <button id="bottomWardrobe"><span class="tab-icon">▣</span><span>Wardrobe</span></button>
       <button class="add" id="bottomAddAI" aria-label="Take a photo">＋</button>
     </nav>
   </main>
@@ -106,7 +106,6 @@
 </div>
 <script src="migrate.js"></script>
 <script src="app.js" defer></script>
-<script src="ai-intercept.js" defer></script>
 <script src="ai-overlay.js" defer></script>
 </body>
 </html>
