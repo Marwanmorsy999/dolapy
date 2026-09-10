@@ -35,7 +35,7 @@
           <p class="settings-intro">Make Dolapy fit the way you dress. Your preferences are stored locally in this browser.</p>
           <section class="settings-section">
             <div class="settings-label"><strong>Styling</strong><span>How Dolapy should start each edit.</span></div>
-            <label class="settings-row"><span><b>Default occasion</b><small>Used when you first open Style me.</small></span><select id="settingsOccasion"><option value="everyday">Everyday</option><option value="smart">Smart</option><option value="date">Date</option><option value="travel">Travel</option><option value="sport">Sport</option></select></label>
+            <label class="settings-row"><span><b>Default occasion</b><small>Used when you start a new styling session.</small></span><select id="settingsOccasion"><option value="everyday">Everyday</option><option value="smart">Smart</option><option value="date">Date</option><option value="travel">Travel</option><option value="sport">Sport</option></select></label>
           </section>
           <section class="settings-section">
             <div class="settings-label"><strong>AI & privacy</strong><span>Control how the browser experience behaves.</span></div>
@@ -71,7 +71,7 @@
     if (!wrap) return;
     wrap.hidden = true;
     document.body.classList.remove('settings-open');
-    $('.mobile-settings')?.focus();
+    $('.mobile-settings, .side-settings')?.focus();
   }
 
   function sync() {
@@ -101,6 +101,7 @@
   function init() {
     applyEffects();
     $('.mobile-settings')?.addEventListener('click', open);
+    $('.side-settings')?.addEventListener('click', open);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#settingsPanel') && !$('#settingsPanel').hidden) close(); });
   }
 
