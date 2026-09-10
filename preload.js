@@ -5,19 +5,23 @@
     const tf = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
     Promise.allSettled([import(bg), import(tf)]).catch(() => {});
   };
-  const loadAIContract = () => {
-    if (document.querySelector('script[data-dolapy-ai-contract]')) return;
+  const loadScript = (src, marker) => {
+    if (document.querySelector(`script[${marker}]`)) return;
     const script = document.createElement('script');
-    script.src = '/ai-provider.js';
+    script.src = src;
     script.async = true;
-    script.dataset.dolapyAiContract = 'true';
+    script.setAttribute(marker, 'true');
     document.head.appendChild(script);
+  };
+  const loadContracts = () => {
+    loadScript('/ai-provider.js', 'data-dolapy-ai-contract');
+    loadScript('/context-engine.js', 'data-dolapy-context-engine');
   };
   if ('requestIdleCallback' in window) {
     window.requestIdleCallback(warm, { timeout: 2500 });
-    window.requestIdleCallback(loadAIContract, { timeout: 3500 });
+    window.requestIdleCallback(loadContracts, { timeout: 3500 });
   } else {
     window.setTimeout(warm, 1200);
-    window.setTimeout(loadAIContract, 1800);
+    window.setTimeout(loadContracts, 1800);
   }
 })();
