@@ -27,9 +27,9 @@
         <div>
           <div class="eyebrow green">Your daily edit</div>
           <h1>What are you<br><em>wearing?</em></h1>
-          <p>Upload the clothes you actually own. Dolapy finds strong combinations, then spreads the wear instead of repeating the same pieces.</p>
+          <p>Take a photo of the clothes you actually own. Dolapy understands the piece, builds strong combinations, then spreads the wear across your wardrobe.</p>
           <div class="actions">
-            <button class="primary" id="addHero">＋ Add clothes</button>
+            <button class="primary" id="addHero">📷 Take photo</button>
             <button class="secondary dark" id="styleHero" disabled>✦ Style my wardrobe</button>
           </div>
         </div>
@@ -63,8 +63,8 @@
 
     <section id="wardrobePage" class="page" hidden>
       <div class="heading">
-        <div><div class="eyebrow green">Your pieces</div><h1>My <em>wardrobe.</em></h1><p>Keep the details light. The engine does the heavy lifting.</p></div>
-        <button class="primary" id="addWardrobe">＋ Add clothes</button>
+        <div><div class="eyebrow green">Your pieces</div><h1>My <em>wardrobe.</em></h1><p>Photograph a piece, make any quick corrections, and let the engine do the rest.</p></div>
+        <button class="primary" id="addWardrobe">📷 Take photo</button>
       </div>
       <div class="filters" id="filters"></div>
       <div class="items" id="itemsGrid"></div>
@@ -78,7 +78,22 @@
   </main>
 </div>
 
-<input id="fileInput" class="hide" type="file" accept="image/*" multiple>
+<input id="fileInput" class="hide" type="file" accept="image/*">
+
+<div id="cameraModal" class="modal-wrap" hidden>
+  <div class="modal camera-modal" role="dialog" aria-modal="true" aria-labelledby="cameraTitle">
+    <div class="modal-head">
+      <div><div class="eyebrow green">Camera</div><h2 id="cameraTitle">Photograph this piece.</h2></div>
+      <button class="close" id="closeCamera" aria-label="Close camera">×</button>
+    </div>
+    <div class="camera-preview"><video id="cameraVideo" autoplay playsinline muted></video><canvas id="cameraCanvas" class="hide"></canvas><div id="cameraHint" class="camera-hint">Center one clothing piece in the frame.</div></div>
+    <div class="camera-actions">
+      <button class="secondary" id="cameraGallery">Choose from device</button>
+      <button class="primary" id="capturePhoto">● Capture photo</button>
+    </div>
+    <div class="note" id="cameraNote">Dolapy will ask for camera permission. On a phone, the rear camera is preferred.</div>
+  </div>
+</div>
 
 <div id="modal" class="modal-wrap" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -95,7 +110,7 @@
     </div>
     <button class="primary full" id="saveItem">✓ Add to wardrobe</button>
     <div class="queue" id="queueInfo"></div>
-    <div class="note">Photos and wardrobe data stay in this browser. The styling engine runs locally and uses no AI model or server.</div>
+    <div class="note">Photos and wardrobe data stay in this browser. The ranking engine runs locally.</div>
   </div>
 </div>
 <script src="migrate.js"></script>
