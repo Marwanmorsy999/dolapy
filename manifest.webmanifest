@@ -1,0 +1,12 @@
+{
+  "name": "Dolapy — Your wardrobe, styled",
+  "short_name": "Dolapy",
+  "description": "Photograph your clothes, build your wardrobe, and get outfits styled from what you own.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f6f8",
+  "theme_color": "#171b23",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
