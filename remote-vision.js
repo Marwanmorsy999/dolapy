@@ -1,29 +1,164 @@
-(()=>{'use strict';
-const STORE='dolapy.pages.v3',API='/api/vision',BG_URL='https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm',$=s=>document.querySelector(s);let enabled=false,stream=null,queue=[],current=null,bg=null,bgLoading=null;
-const uid=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,Number(n)||0));
-function status(show,label='',pct=0,sub=''){let el=$('#aiScanStatus');if(!el){el=document.createElement('div');el.id='aiScanStatus';el.className='scan-status';el.hidden=true;el.innerHTML='<div class="scan-card"><div class="scan-spinner"></div><div class="scan-copy"><strong id="aiScanLabel"></strong><span id="aiScanSub"></span></div><div class="scan-track"><span id="aiScanBar"></span></div></div>';document.body.appendChild(el)}el.hidden=!show;if(show){$('#aiScanLabel').textContent=label;$('#aiScanSub').textContent=sub;$('#aiScanBar').style.width=`${clamp(pct,0,100)}%`}}
-async function capability(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)return false;const j=await r.json();return j?.enabled===true}catch{return false}}
-async function resize(file,max=768){return new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=reject;r.onload=()=>{const im=new Image();im.onerror=reject;im.onload=()=>{const k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.naturalWidth*k));c.height=Math.max(1,Math.round(im.naturalHeight*k));const ctx=c.getContext('2d');if(!ctx)return reject(new Error('canvas unavailable'));ctx.drawImage(im,0,0,c.width,c.height);c.toBlob(b=>b?resolve(b):reject(new Error('encode failed')),'image/jpeg',.76)};im.src=r.result};r.readAsDataURL(file)})}
-const dataUrl=b=>new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=reject;r.onload=()=>resolve(r.result);r.readAsDataURL(b)});
-async function loadBg(){if(bg)return bg;if(bgLoading)return bgLoading;bgLoading=import(BG_URL).then(m=>bg=m.removeBackground).catch(e=>{bgLoading=null;throw e});return bgLoading}
-async function cutout(blob){try{await loadBg();return await bg(blob,{device:'cpu',model:'isnet_quint8',output:{format:'image/webp',quality:.86}})}catch(e){console.warn('remote lane cutout failed',e);return blob}}
-function family(s){s=String(s||'').toLowerCase();if(/black|charcoal/.test(s))return'black';if(/white|cream|ivory/.test(s))return'white';if(/grey|gray|silver/.test(s))return'grey';if(/beige|tan|camel|khaki|sand|stone|oat/.test(s))return'neutral';if(/brown|chocolate|mocha|coffee/.test(s))return'brown';if(/navy|blue|denim|cobalt|teal|sky|azure/.test(s))return'blue';if(/green|olive|sage|forest|mint/.test(s))return'green';if(/red|burgundy|maroon|wine|crimson/.test(s))return'red';if(/orange|rust|terracotta|coral/.test(s))return'orange';if(/yellow|mustard|gold/.test(s))return'yellow';if(/purple|lavender|lilac|violet/.test(s))return'purple';if(/pink|rose|blush/.test(s))return'pink';return'neutral'}
-function formality(style){return style==='smart'?4:style==='preppy'?3:style==='athletic'?1:2}
-function enrich(v,image){const category=v.category||'tops',season=v.season||'all',style=v.style||'casual';return{id:uid(),name:v.name||'Clothing piece',image,category,color:v.color||'neutral',colorFamily:v.colorFamily||family(v.color),style,silhouette:v.silhouette||'regular',pattern:v.pattern||'solid',season,occasion:style==='smart'?'smart':style==='athletic'?'sport':'everyday',warmth:category==='outerwear'?4:category==='shoes'?2:season==='summer'?1:season==='winter'?4:3,formality:formality(style),wearCount:0,favorite:false,aiIdentified:true,visualConfidence:clamp(v.confidence),recognitionMargin:clamp(v.confidence*.55),aiAlternatives:[],metadataConfidence:clamp(v.confidence*.9+.08),createdAt:Date.now()}}
-async function remoteAnalyse(file){const original=await resize(file);const img=await dataUrl(original);status(true,'Reading your piece…',30,'Phone stays light; the vision model runs at the edge.');const visionJob=fetch(API,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({image:img})}).then(async r=>{const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||'Vision unavailable');return j.item});const cutJob=cutout(original);const [v,cut]=await Promise.all([visionJob,cutJob]);status(true,'Cleaning the garment…',78,'Keeping the actual piece while removing the background.');return enrich(v,await dataUrl(cut))}
-function isMobile(){return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)||globalThis.matchMedia?.('(pointer:coarse)')?.matches}
-function nativePhoto(){const input=$('#aiFileInput');if(!input){alert('Camera input is unavailable. Please reload Dolapy.');return false}input.value='';input.setAttribute('capture','environment');try{input.click();return true}catch(e){console.error('Dolapy native camera error',e);return false}}
-function openCamera(){if(isMobile()){nativePhoto();return}const wrap=$('#cameraModal');const video=$('#cameraVideo');if(!wrap||!video)return;wrap.hidden=false;if(!navigator.mediaDevices?.getUserMedia){wrap.hidden=true;nativePhoto();return}navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:896},height:{ideal:896},frameRate:{ideal:24,max:30}},audio:false}).then(s=>{stream=s;video.srcObject=s;video.play().catch(()=>{})}).catch(error=>{console.warn('Dolapy camera access failed',error);closeCamera();nativePhoto()})}
-function closeCamera(){stream?.getTracks?.().forEach(t=>t.stop());stream=null;const v=$('#cameraVideo');if(v)v.srcObject=null;const wrap=$('#cameraModal');if(wrap)wrap.hidden=true}
-async function capture(){const video=$('#cameraVideo'),canvas=$('#cameraCanvas');if(!video||!canvas||video.readyState<2){nativePhoto();return}const size=768,k=Math.min(1,size/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*k));canvas.height=Math.max(1,Math.round(video.videoHeight*k));const ctx=canvas.getContext('2d');if(!ctx){nativePhoto();return}ctx.drawImage(video,0,0,canvas.width,canvas.height);const file=await new Promise(resolve=>canvas.toBlob(b=>resolve(new File([b||new Blob()],`dolapy-${Date.now()}.jpg`,{type:'image/jpeg'})),'image/jpeg',.76));closeCamera();await processFiles([file])}
-function showResult(item){if(!item)return;current=item;$('#previewImg').src=item.image;$('#fName').value=item.name;$('#fCategory').value=item.category;$('#fColor').value=item.color;$('#fStyle').value=item.style;$('#queueInfo').textContent=queue.length?`${queue.length} more piece${queue.length===1?'':'s'} to review`:`Vision confidence ${Math.round((item.metadataConfidence||0)*100)}%`;$('#modal').hidden=false}
-function save(){if(!current)return;current.name=String($('#fName').value||'').trim()||current.name;current.category=$('#fCategory').value;current.color=String($('#fColor').value||'').trim()||current.color;current.style=$('#fStyle').value;current.formality=formality(current.style);let items=[];try{items=JSON.parse(localStorage.getItem(STORE)||'[]')}catch{}if(!Array.isArray(items))items=[];items.unshift(current);try{localStorage.setItem(STORE,JSON.stringify(items))}catch{alert('Wardrobe storage is full. Remove an older piece first.');return}current=null;if(queue.length)showResult(queue.shift());else{$('#modal').hidden=true;status(false);window.location.reload()}}
-function closeResult(){current=null;queue=[];$('#modal').hidden=true;status(false)}
-async function processFiles(files){const list=[...(files||[])].filter(f=>f?.type?.startsWith('image/'));if(!list.length)return;if(!enabled){if(typeof globalThis.startUpload==='function'){await globalThis.startUpload(list);return}status(true,'Preparing your photo…',35,'The local photo workflow is starting.');setTimeout(()=>status(false),500);alert('Photo processing is still starting. Please try the photo again.');return}queue=[];for(let i=0;i<list.length;i++){try{const item=await remoteAnalyse(list[i]);if(i<list.length-1)queue.push(item);else showResult(item)}catch(e){console.error('Dolapy vision failed',e);if(i===0){status(false);alert('Could not analyze that photo. Please try again.');return}}status(true,`Analyzing ${Math.min(i+1,list.length)} of ${list.length}…`,Math.round(((i+1)/list.length)*94),'One piece at a time keeps phone memory stable.')}status(false)}
-function intercept(id,fn){const el=$(id);if(!el)return;el.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();fn()},true)}
-function bind(){window.__DOLAPY_REMOTE_VISION=true;intercept('#addHeroAI',openCamera);intercept('#addWardrobeAI',openCamera);intercept('#bottomAddAI',openCamera);intercept('#capturePhoto',capture);intercept('#closeCamera',closeCamera);intercept('#cameraGallery',nativePhoto);intercept('#saveItem',save);intercept('#closeModal',closeResult);const input=$('#aiFileInput');input?.addEventListener('change',e=>{e.stopImmediatePropagation();const files=[...(e.target.files||[])];input.value='';processFiles(files)},true);status(false)}
-bind();
-capability().then(ok=>{enabled=ok;window.__DOLAPY_REMOTE_VISION=true}).catch(()=>{enabled=false});
-window.warmDolapyAI=()=>enabled?Promise.resolve():window.warmDolapyAI;
+(() => {
+  'use strict';
+
+  const $ = (selector) => document.querySelector(selector);
+  let stream = null;
+
+  const isMobile = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+    || Boolean(globalThis.matchMedia?.('(pointer: coarse)')?.matches);
+
+  function getPhotoInput() {
+    const input = $('#aiFileInput');
+    if (!input) return null;
+    input.accept = 'image/*';
+    if (isMobile()) input.setAttribute('capture', 'environment');
+    return input;
+  }
+
+  function sendToVision(files) {
+    const list = [...(files || [])].filter(file => file?.type?.startsWith('image/'));
+    if (!list.length) return;
+
+    // vision-engine-v3.js owns the real AI workflow: background removal,
+    // FashionCLIP identification, color extraction and result presentation.
+    if (typeof globalThis.startAIUpload === 'function') {
+      Promise.resolve(globalThis.startAIUpload(list)).catch(error => {
+        console.error('Dolapy vision processing failed:', error);
+        alert('Dolapy could not process that photo. Please try another photo.');
+      });
+      return;
+    }
+
+    alert('Dolapy vision is still loading. Please try the photo again.');
+  }
+
+  function nativePhoto() {
+    const input = getPhotoInput();
+    if (!input) {
+      alert('Camera input is unavailable. Please reload Dolapy.');
+      return;
+    }
+    input.value = '';
+    input.click();
+  }
+
+  function stopCamera() {
+    stream?.getTracks?.().forEach(track => track.stop());
+    stream = null;
+    const video = $('#cameraVideo');
+    if (video) video.srcObject = null;
+  }
+
+  function closeCamera() {
+    stopCamera();
+    const modal = $('#cameraModal');
+    if (modal) modal.hidden = true;
+  }
+
+  async function openCamera() {
+    // Mobile: use the operating system's camera picker directly.
+    // This avoids browser/PWA getUserMedia differences.
+    if (isMobile()) {
+      nativePhoto();
+      return;
+    }
+
+    const modal = $('#cameraModal');
+    const video = $('#cameraVideo');
+    if (!modal || !video || !navigator.mediaDevices?.getUserMedia) {
+      nativePhoto();
+      return;
+    }
+
+    modal.hidden = false;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
+          frameRate: { ideal: 24, max: 30 }
+        },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+    } catch (error) {
+      console.warn('Dolapy camera failed; using native photo capture:', error);
+      closeCamera();
+      nativePhoto();
+    }
+  }
+
+  async function captureDesktop() {
+    const video = $('#cameraVideo');
+    const canvas = $('#cameraCanvas');
+    if (!video || !canvas || video.readyState < 2 || !video.videoWidth) {
+      nativePhoto();
+      return;
+    }
+
+    const max = 1024;
+    const scale = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      nativePhoto();
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+    if (!blob) {
+      nativePhoto();
+      return;
+    }
+
+    const file = new File([blob], `dolapy-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    closeCamera();
+    sendToVision([file]);
+  }
+
+  function bind() {
+    const input = getPhotoInput();
+    input?.addEventListener('change', event => {
+      event.stopImmediatePropagation();
+      const files = [...(event.target.files || [])];
+      event.target.value = '';
+      sendToVision(files);
+    }, true);
+
+    for (const id of ['#addHeroAI', '#addWardrobeAI', '#bottomAddAI']) {
+      $(id)?.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openCamera();
+      }, true);
+    }
+
+    $('#capturePhoto')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      captureDesktop();
+    }, true);
+
+    $('#closeCamera')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeCamera();
+    }, true);
+
+    $('#cameraGallery')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      nativePhoto();
+    }, true);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind, { once: true });
+  } else {
+    bind();
+  }
 })();
