@@ -150,6 +150,30 @@ async function measureTransparency(blob){
   }catch(e){dbg('Transparency check failed: '+e.message,'warn');return 0}
 }
 
+async function maskCompositeAlpha(original,mask){
+  // Reads the ALPHA channel of the mask blob (not RGB luminance).
+  // IMG.LY segmentForeground encodes foreground as alpha=255, background as alpha=0.
+  const src=await imageFromSource(await readFile(original));
+  const msk=await imageFromSource(await readFile(mask));
+  const w=src.naturalWidth||src.width,h=src.naturalHeight||src.height;
+  const mc=document.createElement('canvas'),oc=document.createElement('canvas');
+  mc.width=oc.width=w;mc.height=oc.height=h;
+  const mx=mc.getContext('2d',{willReadFrequently:true}),ox=oc.getContext('2d',{alpha:true});
+  if(!mx||!ox)throw new Error('Canvas unavailable for alpha composite');
+  mx.drawImage(msk,0,0,w,h);
+  ox.drawImage(src,0,0,w,h);
+  const md=mx.getImageData(0,0,w,h).data,od=ox.getImageData(0,0,w,h),px=od.data;
+  for(let i=0;i<px.length;i+=4){
+    // Use alpha channel of mask as the foreground signal
+    // If mask alpha=255 → foreground (keep), alpha=0 → background (remove)
+    // If mask is grayscale (alpha=255 everywhere), fall back to luminance
+    const maskAlpha=md[i+3];
+    const lum=(md[i]+md[i+1]+md[i+2])/3;
+    const signal=maskAlpha<254?maskAlpha:lum; // use alpha if not all-opaque, else luminance
+    px[i+3]=signal>128?255:signal<64?0:Math.round(signal*2);
+  }
+  return new Promise((res,rej)=>oc.toBlob(b=>b?res(b):rej(new Error('Alpha composite encoding failed')),'image/png',1));
+}
 async function maskComposite(original,mask){
   const src=await imageFromSource(await readFile(original));
   const msk=await imageFromSource(await readFile(mask));
@@ -188,22 +212,27 @@ async function cleanCutout(blob){
   if(!removeBackground&&!segmentForeground)throw new Error('BG removal module not loaded');
   const model=perf().segmentationModel?.()||'isnet_fp16';
   const device=navigator.gpu?'gpu':'cpu';
-  dbg(`BG removal: model=${model} device=${device} segFg=${typeof segmentForeground}`);
+  dbg(`BG removal: model=${model} device=${device}`);
   let result=null;
-  if(segmentForeground){
-    dbg('Using segmentForeground path');
-    const mask=await timeout(
-      segmentForeground(blob,{device,model,output:{format:'image/png',quality:1}}),
-      perf().lowPower?90000:60000,'BG mask timed out'
-    );
-    dbg('Got mask blob, compositing…');
-    result=await maskComposite(blob,mask);
-  } else {
-    dbg('Using removeBackground path');
+  // Always use removeBackground directly — it returns a transparent PNG with original RGB intact.
+  // segmentForeground returns a mask blob whose format is ambiguous (alpha vs luminance encoding varies
+  // by version), and the maskComposite step was producing 0% transparency. removeBackground is simpler,
+  // more reliable, and still preserves garment colors since it outputs original pixels + alpha channel.
+  if(removeBackground){
+    dbg('Using removeBackground (direct transparent PNG)');
     result=await timeout(
       removeBackground(blob,{device,model,output:{format:'image/png',quality:1}}),
       perf().lowPower?90000:60000,'BG removal timed out'
     );
+  } else if(segmentForeground){
+    // Fallback: segmentForeground + alpha-channel composite (not luminance)
+    dbg('Fallback: segmentForeground + alpha composite');
+    const mask=await timeout(
+      segmentForeground(blob,{device,model,output:{format:'image/png',quality:1}}),
+      perf().lowPower?90000:60000,'BG mask timed out'
+    );
+    dbg('Got mask, compositing via alpha channel…');
+    result=await maskCompositeAlpha(blob,mask);
   }
   if(!result)throw new Error('BG removal returned empty result');
   const transparency=await measureTransparency(result);
