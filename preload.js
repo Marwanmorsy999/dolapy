@@ -8,6 +8,12 @@
     script.setAttribute(marker, 'true');
     document.head.appendChild(script);
   };
+  const loadStyle = (href, marker) => {
+    if (document.querySelector(`link[${marker}]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet'; link.href = href; link.setAttribute(marker, 'true');
+    document.head.appendChild(link);
+  };
   const warmModules = () => {
     const bg = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
     const tf = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
@@ -21,6 +27,7 @@
     loadScript('/ai-provider.js', 'data-dolapy-ai-contract');
     loadScript('/context-engine.js', 'data-dolapy-context-engine');
     loadScript('/outfit-composer.js', 'data-dolapy-outfit-composer');
+    loadStyle('/outfit-composer.css', 'data-dolapy-outfit-composer-css');
   };
   if ('requestIdleCallback' in window) {
     window.requestIdleCallback(warmModules, {timeout:1800});
