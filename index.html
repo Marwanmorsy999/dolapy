@@ -7,6 +7,14 @@
   <meta name="description" content="Dolapy — style the clothes you already own.">
   <title>Dolapy — Your wardrobe, styled</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .camera-preview{position:relative;height:min(62vh,520px);margin-top:15px;border-radius:18px;overflow:hidden;background:#0d1117;display:grid;place-items:center}
+    .camera-preview video{width:100%;height:100%;object-fit:cover}
+    .camera-hint{position:absolute;left:16px;right:16px;bottom:16px;padding:11px 13px;border-radius:12px;background:#171b23d9;color:#fff;text-align:center;font-size:12px;backdrop-filter:blur(6px)}
+    .camera-actions{display:grid;grid-template-columns:1fr 1.25fr;gap:10px;margin-top:14px}
+    .camera-actions button{width:100%}
+    @media(max-width:520px){.camera-modal{padding:14px}.camera-preview{height:56vh;margin-top:12px}.camera-actions{grid-template-columns:1fr 1.2fr}.camera-actions button{padding:13px 10px}.camera-modal .note{font-size:10px}}
+  </style>
 </head>
 <body>
 <div class="app">
@@ -115,5 +123,6 @@
 </div>
 <script src="migrate.js"></script>
 <script src="app.js" defer></script>
+<script src="camera.js" defer></script>
 </body>
 </html>
