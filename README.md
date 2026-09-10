@@ -1,34 +1,15 @@
 # Dolapy
 
-Dolapy is a mobile-first wardrobe app: upload the clothes you own, get deterministic outfit recommendations, and style the wardrobe as a whole without requiring an AI model.
+Dolapy is a mobile-first, local-first wardrobe stylist. The MVP is intentionally AI-free: photo upload, editable local classification, deterministic outfit ranking, and whole-wardrobe coverage all run in the browser.
 
-## Core engine
+## Core product
 
-The styling engine in `src/lib/smart-styling-engine.ts` ranks combinations using explicit compatibility signals: color, style, formality, silhouette, pattern, layering, season/context, freshness, and wardrobe coverage. A second planning pass deliberately brings less-used pieces into later looks so the result is a wardrobe plan rather than one repeated outfit.
+`upload clothes → quick classify → style me → show alternatives → style my whole wardrobe`
 
-`src/lib/clothing-analysis.ts` provides local, no-AI upload metadata heuristics. The user can confirm or adjust the result before saving.
+The engine uses hard constraints first, then scores color harmony, style compatibility, formality coherence, silhouette, pattern control, context fit, novelty, favorites, and piece coverage. It selects several high-quality looks while penalizing repeated pieces so the wardrobe is actually used.
 
 ## Cloudflare Pages
 
-Build command:
+This repository is a static site. Deploy from the repository root with **no build command** and the output directory left as the root/current directory. Cloudflare Pages will serve `index.html` and `_redirects` directly.
 
-```bash
-npm run build
-```
-
-Output directory:
-
-```text
-dist
-```
-
-Set the required production variables in Cloudflare Pages, especially `VITE_CLERK_PUBLISHABLE_KEY`. Set `VITE_API_BASE_URL` when the API is deployed separately from the Pages site.
-
-The app is a standard Vite SPA and includes a Pages `_redirects` fallback.
-
-## Local development
-
-```bash
-npm install
-npm run dev
-```
+No Replit runtime, Replit config, server, API, or AI provider is required for the core MVP.
