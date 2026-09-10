@@ -11,11 +11,12 @@
 </head>
 <body>
 <svg class="icon-sprite" aria-hidden="true" focusable="false">
-  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2Z"/><path d="M19 16l.7 2.3L22 19l-2.3-.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 2l1.5 6.5L20 10l6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5L12 2Z"/><path d="M19 16l.7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></symbol>
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 7.5h3l1.3-2h7.4l1.3 2h3A2 2 0 0 1 22 9.5v8A2 2 0 0 1 20 19.5H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13.5" r="4"/></symbol>
   <symbol id="i-closet" viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8v8M15 8v8M3 20h18"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.2 4.2L19 6.5"/></symbol>
   <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.4 15 .9 1.6-2 2-1.6-.9-1.3.6-.5 1.8h-2.8l-.5-1.8-1.3-.6-1.6.9-2-2 .9-1.6-.6-1.3-1.8-.5v-2.8l1.8-.5.6-1.3-.9-1.6 2-2 1.6.9 1.3-.6.5-1.8h2.8l.5 1.8 1.3.6 1.6-.9 2 2-.9 1.6.6 1.3 1.8.5v2.8l-1.8.5-.6 1.3Z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
 </svg>
@@ -27,7 +28,7 @@
     <div class="side-foot"><span class="status-dot"></span> AI vision · local outfit engine</div>
   </aside>
   <main class="main">
-    <header class="mobile-head"><span class="mobile-menu" role="button" tabindex="0" aria-label="Open navigation menu" aria-expanded="false"><svg><use href="#i-menu"/></svg></span><div class="brand mobile-brand"><span class="logo-mark">D</span><span>Dolapy</span><b>.</b></div><div class="avatar">D</div></header>
+    <header class="mobile-head"><button class="mobile-menu" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobileDrawer"><svg><use href="#i-menu"/></svg></button><div class="brand mobile-brand"><span class="logo-mark">D</span><span>Dolapy</span><b>.</b></div><button class="mobile-settings" type="button" aria-label="Open settings"><svg><use href="#i-settings"/></svg></button></header>
     <section id="stylePage" class="page"><div class="hero"><div><div class="eyebrow green">Your daily edit</div><h1>What are you<br><em>wearing?</em></h1><p>Photograph a piece. Dolapy isolates it, identifies it, gives it a clean name, then styles it with the rest of your wardrobe.</p><div class="actions"><button class="primary" id="addHeroAI"><span class="btn-icon"><svg><use href="#i-camera"/></svg></span> Take photo</button><button class="secondary dark" id="styleHero" disabled><span class="btn-icon"><svg><use href="#i-spark"/></svg></span> Style my wardrobe</button></div></div><div class="seal" aria-hidden="true"><span>D</span><small>DAILY<br>EDIT</small></div></div>
       <div class="stats"><div class="stat"><span>Wardrobe</span><strong id="statItems">0</strong><small>pieces logged</small></div><div class="stat"><span>Coverage</span><strong id="statCoverage">—</strong><small>of pieces styled</small></div><div class="stat"><span>Best match</span><strong id="statScore">—</strong><small>current edit</small></div></div>
       <section class="engine"><div class="engine-head"><div><div class="eyebrow">The engine</div><h2>Style <em>everything</em><br>you already own.</h2><p>Clean clothing assets in, smart outfit ranking out. Dolapy filters impossible combinations, balances color and silhouette, respects context, and avoids repeating the same pieces.</p></div><div class="engine-chip"><svg><use href="#i-spark"/></svg><span>SMART</span><small>STYLE ENGINE</small></div></div><div class="pills" id="occasionPills"></div><div id="engineBody"></div></section>
