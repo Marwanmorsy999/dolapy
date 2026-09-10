@@ -9,7 +9,7 @@ window.DolapyPerformance={
   imageSize(){return this.lowPower?768:1024},
   // Use the quantized model on CPU/mobile. FP16 is intended for capable GPU paths;
   // forcing it through a mobile CPU/WASM fallback can leave the original image in place.
-  segmentationModel(){return this.lowPower?'isnet_quint8':'isnet_fp16'},
+  segmentationModel(){return 'isnet_quint8'}, // always use quantized — fp16 is slow and heavy in mobile browsers regardless of navigator.gpu
   classifierOptions(){return navigator.gpu&&!this.lowPower?{device:'webgpu',dtype:'fp16'}:{device:'wasm',dtype:'q8'}},
   shouldRunSecondPass(score){return Number(score||0)<(this.lowPower?.32:.42)},
   compositeLimit(){return this.lowPower?4:6}
