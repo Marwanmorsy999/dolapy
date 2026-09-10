@@ -7,8 +7,9 @@ window.DolapyPerformance={
   mobile:LOW_END||/Mobile/i.test(navigator.userAgent),
   lowPower:LOW_END||slowNetwork,
   imageSize(){return this.lowPower?768:1024},
-  // Keep the proven browser-compatible IS-Net FP16 model. Full IS-Net is WebGPU-oriented and can fail or time out on mobile CPU fallback.
-  segmentationModel(){return 'isnet_fp16'},
+  // Use the quantized model on CPU/mobile. FP16 is intended for capable GPU paths;
+  // forcing it through a mobile CPU/WASM fallback can leave the original image in place.
+  segmentationModel(){return this.lowPower?'isnet_quint8':'isnet_fp16'},
   classifierOptions(){return navigator.gpu&&!this.lowPower?{device:'webgpu',dtype:'fp16'}:{device:'wasm',dtype:'q8'}},
   shouldRunSecondPass(score){return Number(score||0)<(this.lowPower?.32:.42)},
   compositeLimit(){return this.lowPower?4:6}
