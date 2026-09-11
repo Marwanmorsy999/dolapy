@@ -1,4 +1,3 @@
-import spaces
 import torch
 from PIL import Image
 from transformers import pipeline
@@ -7,24 +6,17 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import gradio as gr
 
-pipe = None
+# Load model at startup — runs on GPU if available, CPU otherwise
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Loading RMBG-2.0 on {device}...")
 
-def load_model():
-    global pipe
-    if pipe is None:
-        pipe = pipeline(
-            "image-segmentation",
-            model="briaai/RMBG-2.0",
-            trust_remote_code=True,
-            device="cuda" if torch.cuda.is_available() else "cpu"
-        )
-    return pipe
-
-# Pre-load on startup
-try:
-    load_model()
-except Exception as e:
-    print(f"Model pre-load deferred: {e}")
+pipe = pipeline(
+    "image-segmentation",
+    model="briaai/RMBG-2.0",
+    trust_remote_code=True,
+    device=device
+)
+print("Model loaded.")
 
 app = FastAPI()
 app.add_middleware(
@@ -34,10 +26,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@spaces.GPU(duration=30)
 def remove_background(image: Image.Image) -> Image.Image:
-    model = load_model()
-    result = model(image, return_tensors=False)
+    result = pipe(image, return_tensors=False)
     entry = result[0] if isinstance(result, list) else result
     mask = entry.get("mask") or entry.get("score")
     if mask is None:
@@ -47,8 +37,7 @@ def remove_background(image: Image.Image) -> Image.Image:
     output = image.convert("RGBA")
     mask_l = mask.convert("L").resize(output.size, Image.LANCZOS)
     r, g, b, a = output.split()
-    output = Image.merge("RGBA", (r, g, b, mask_l))
-    return output
+    return Image.merge("RGBA", (r, g, b, mask_l))
 
 @app.post("/remove-bg")
 async def remove_bg_endpoint(request: Request):
@@ -68,23 +57,32 @@ async def remove_bg_endpoint(request: Request):
             image_bytes = base64.b64decode(b64)
         else:
             image_bytes = await request.body()
+
         if not image_bytes:
             return Response(content='{"error":"empty"}', status_code=400, media_type="application/json")
+
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         result = remove_background(image)
         buf = io.BytesIO()
         result.save(buf, format="PNG", optimize=False)
         buf.seek(0)
         return Response(
-            content=buf.read(), media_type="image/png",
+            content=buf.read(),
+            media_type="image/png",
             headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
         )
     except Exception as e:
-        return Response(content=f'{{"error":"{str(e)}"}}', status_code=500, media_type="application/json")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            content=f'{{"error":"{str(e)}"}}',
+            status_code=500,
+            media_type="application/json"
+        )
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": "briaai/RMBG-2.0", "gpu": torch.cuda.is_available()}
+    return {"status": "ok", "model": "briaai/RMBG-2.0", "device": device}
 
 def gradio_fn(image):
     if image is None:
