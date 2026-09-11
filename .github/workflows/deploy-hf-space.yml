@@ -13,39 +13,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to HuggingFace Space
+      - name: Upload files via HF API
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set -e
+          set -ex
 
-          # Delete old space (clear any SDK lock from Docker experiment)
-          curl -s -X DELETE \
-            -H "Authorization: Bearer $HF_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"type":"space","name":"dolapy-rmbg"}' \
-            https://huggingface.co/api/repos/delete || true
-
-          sleep 3
-
-          # Recreate as gradio SDK
-          curl -sf -X POST \
+          # Create space if needed
+          curl -s -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
-            https://huggingface.co/api/repos/create
+            https://huggingface.co/api/repos/create || true
 
-          sleep 2
+          # Upload each file via HF commit API
+          APP_CONTENT=$(base64 -w0 hf-space/app.py)
+          REQ_CONTENT=$(base64 -w0 hf-space/requirements.txt)
+          README_CONTENT=$(base64 -w0 hf-space/README.md)
 
-          # Push files
-          cd hf-space
-          git init
-          git config user.email "maro@dolapy.app"
-          git config user.name "Dolapy"
-          git add -A
-          git commit -m "Deploy RMBG-2.0 FastAPI"
-          git push --force \
-            "https://Marwanmorsy999:$HF_TOKEN@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
-            HEAD:main
+          curl -sf -X POST \
+            -H "Authorization: Bearer $HF_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"operations\": [
+                {\"op\":\"addOrUpdate\",\"path\":\"app.py\",\"content\":\"$APP_CONTENT\"},
+                {\"op\":\"addOrUpdate\",\"path\":\"requirements.txt\",\"content\":\"$REQ_CONTENT\"},
+                {\"op\":\"addOrUpdate\",\"path\":\"README.md\",\"content\":\"$README_CONTENT\"}
+              ],
+              \"commit_message\": \"Deploy RMBG-2.0\"
+            }" \
+            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg/commit/main"
 
-          echo "Done: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
+          echo "Upload complete."
+          echo "Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg"
