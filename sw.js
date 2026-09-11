@@ -1,4 +1,4 @@
-const CACHE='dolapy-pwa-v30';
+const CACHE='dolapy-pwa-v31';
 const APP_SHELL=['/','/index.html','/styles.css','/ai.css','/settings.css','/pwa.css','/intelligence.css','/engine-v3.css','/outfit-composer.css','/app.js','/wardrobe-intelligence.js','/context-engine.js','/engine-v3.js','/vision-engine-v3.js','/outfit-composer.js','/remote-vision.js','/mobile-menu.js','/settings.js','/pwa.js','/preload.js','/ai-provider.js','/migrate.js','/mobile-performance.js','/manifest.webmanifest','/icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
