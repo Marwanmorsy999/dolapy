@@ -17,22 +17,38 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          echo "Creating space..."
           curl -s -X POST https://huggingface.co/api/repos/create \
             -H "Authorization: Bearer ${HF_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' || true
+            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' | python3 -c "import sys,json; d=json.load(sys.stdin); print('Create result:', d.get('url','already exists'))" || true
 
       - name: Push files to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -e
+          echo "Token prefix: ${HF_TOKEN:0:10}..."
+          
+          # Verify token
+          curl -sf -H "Authorization: Bearer ${HF_TOKEN}" \
+            https://huggingface.co/api/whoami-v2 | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print('HF user:', d.get('name','unknown'))
+" || echo "Token check failed"
+
           cd hf-space
           git init
-          git config user.email "dolapy@users.noreply.huggingface.co"
-          git config user.name "Dolapy Bot"
-          git add .
-          git commit -m "Deploy: FastAPI + Gradio at /ui"
-          git push --force https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg main
-          echo "Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg"
-          echo "API:   https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
-          echo "Health: https://marwanmorsy999-dolapy-rmbg.hf.space/health"
+          git config user.email "maro@dolapy.app"
+          git config user.name "Dolapy"
+          git add -A
+          git status
+          git commit -m "Deploy: RMBG-2.0 FastAPI + Gradio UI"
+          
+          # Try push with verbose output
+          GIT_TERMINAL_PROMPT=0 git push --force \
+            "https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
+            HEAD:main 2>&1
+          
+          echo "Push complete."
