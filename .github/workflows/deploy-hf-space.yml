@@ -17,32 +17,29 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set -ex
+          echo "Token starts with: ${HF_TOKEN:0:12}"
 
-          # Create space if needed
+          echo "=== Whoami ==="
+          curl -s -H "Authorization: Bearer $HF_TOKEN" \
+            https://huggingface.co/api/whoami-v2
+
+          echo ""
+          echo "=== Create/check space ==="
           curl -s -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
-            https://huggingface.co/api/repos/create || true
+            https://huggingface.co/api/repos/create
 
-          # Upload each file via HF commit API
-          APP_CONTENT=$(base64 -w0 hf-space/app.py)
-          REQ_CONTENT=$(base64 -w0 hf-space/requirements.txt)
-          README_CONTENT=$(base64 -w0 hf-space/README.md)
+          echo ""
+          echo "=== Commit API test ==="
+          README='LS0tCnRpdGxlOiBEb2xhcHkgUk1CRwplbW9qaTogNDUKY29sb3JGcm9tOiB5ZWxsb3cKY29sb3JUbzogZ3JlZW4Kc2RrOiBncmFkaW8Kc2RrX3ZlcnNpb246ICI0LjQ0LjAiCmFwcF9maWxlOiBhcHAucHkKcGlubmVkOiB0cnVlCi0tLQoKIyBEb2xhcHkgUk1CRwo='
 
-          curl -sf -X POST \
+          curl -sv -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"operations\": [
-                {\"op\":\"addOrUpdate\",\"path\":\"app.py\",\"content\":\"$APP_CONTENT\"},
-                {\"op\":\"addOrUpdate\",\"path\":\"requirements.txt\",\"content\":\"$REQ_CONTENT\"},
-                {\"op\":\"addOrUpdate\",\"path\":\"README.md\",\"content\":\"$README_CONTENT\"}
-              ],
-              \"commit_message\": \"Deploy RMBG-2.0\"
-            }" \
-            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg/commit/main"
+            -d "{\"operations\":[{\"op\":\"addOrUpdate\",\"path\":\"README.md\",\"content\":\"$README\"}],\"commit_message\":\"test\"}" \
+            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg/commit/main" 2>&1
 
-          echo "Upload complete."
-          echo "Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg"
+          echo ""
+          echo "=== Done ==="
