@@ -211,7 +211,7 @@ async function maskComposite(original,mask){
 async function cleanCutout(blob){
   if(!removeBackground&&!segmentForeground)throw new Error('BG removal module not loaded');
   const model=perf().segmentationModel?.()||'isnet_fp16';
-  const device=navigator.gpu?'gpu':'cpu';
+  const device=(perf().segmentationDevice?.()||( navigator.gpu?'gpu':'cpu'));
   dbg(`BG removal: model=${model} device=${device}`);
   let result=null;
   // Always use removeBackground directly — it returns a transparent PNG with original RGB intact.
@@ -280,7 +280,7 @@ async function analyse(file){
   if(!file)throw new Error('No image supplied');
   dbgReset();
   dbg(`Photo received: ${file.name||'unnamed'} ${Math.round((file.size||0)/1024)}KB type=${file.type}`);
-  status(true,'Preparing your photo…',22,'Optimizing the camera image.');
+  status(true,'Preparing your photo…',22,'Tip: flat on a plain surface = best results.');
   const normalized=await normalizeImage(file);
   const fallback=filenameMeta(file);
   dbg('Normalizing done, loading AI…');
