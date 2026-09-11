@@ -13,25 +13,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy Worker via Wrangler
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_TOKEN }}
+      - name: Write wrangler.toml
         run: |
-          # Write wrangler config
-          cat > wrangler.toml << 'WRANGLER'
+          cat > wrangler.toml << 'EOF'
           name = "dolapy-rmbg"
           main = "rmbg-worker.js"
           compatibility_date = "2024-09-01"
-          WRANGLER
+          EOF
 
-          npx wrangler@latest deploy rmbg-worker.js \
-            --name dolapy-rmbg \
-            --compatibility-date 2024-09-01 \
-            --no-bundle 2>&1
+      - name: Deploy via Wrangler Action
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_TOKEN }}
+          command: deploy rmbg-worker.js --name dolapy-rmbg --compatibility-date 2024-09-01 --no-bundle
 
-      - name: Verify deployment
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_TOKEN }}
+      - name: Health check
         run: |
-          sleep 3
-          curl -sf https://dolapy-rmbg.marwanmorsy999.workers.dev/health || echo "Health check pending"
+          sleep 5
+          curl -sf https://dolapy-rmbg.marwanmorsy999.workers.dev/health && echo "Worker live" || echo "Health check pending (normal on first deploy)"
