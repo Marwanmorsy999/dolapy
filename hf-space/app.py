@@ -85,3 +85,5 @@ with gr.Blocks(title="Dolapy RMBG") as demo:
 
 # Mount at /ui — FastAPI owns /remove-bg and /health
 app = gr.mount_gradio_app(app, demo, path="/ui")
+
+# trigger
