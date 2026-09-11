@@ -13,42 +13,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create Space if it doesn't exist
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          echo "Creating space..."
-          curl -s -X POST https://huggingface.co/api/repos/create \
-            -H "Authorization: Bearer ${HF_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' | python3 -c "import sys,json; d=json.load(sys.stdin); print('Create result:', d.get('url','already exists'))" || true
-
-      - name: Push files to HuggingFace Space
+      - name: Reset Space to Gradio SDK and push files
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -e
-          echo "Token prefix: ${HF_TOKEN:0:10}..."
           
-          # Verify token
+          echo "=== Verifying HF token ==="
           curl -sf -H "Authorization: Bearer ${HF_TOKEN}" \
             https://huggingface.co/api/whoami-v2 | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-print('HF user:', d.get('name','unknown'))
-" || echo "Token check failed"
+print('HF user:', d.get('name'))
+"
 
+          echo "=== Deleting and recreating Space (clean slate) ==="
+          # Delete existing space to clear any SDK lock
+          curl -s -X DELETE \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            "https://huggingface.co/api/repos/delete" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"space","name":"dolapy-rmbg"}' || echo "Delete skipped"
+          
+          sleep 2
+          
+          # Recreate as gradio
+          curl -sf -X POST https://huggingface.co/api/repos/create \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print('Space URL:', d.get('url'))
+print('Errors:', d.get('error'))
+"
+          
+          sleep 3
+          
+          echo "=== Pushing files ==="
           cd hf-space
           git init
           git config user.email "maro@dolapy.app"
           git config user.name "Dolapy"
           git add -A
-          git status
-          git commit -m "Deploy: RMBG-2.0 FastAPI + Gradio UI"
+          git commit -m "Deploy RMBG-2.0"
           
-          # Try push with verbose output
-          GIT_TERMINAL_PROMPT=0 git push --force \
+          GIT_TERMINAL_PROMPT=0 git push \
             "https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
             HEAD:main 2>&1
           
-          echo "Push complete."
+          echo "=== Done ==="
+          echo "Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg"
+          echo "API: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
