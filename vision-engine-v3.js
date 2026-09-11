@@ -255,19 +255,10 @@ async function cleanCutout(blob){
   }catch(serverErr){
     dbg(`Server failed: ${serverErr.message} — trying on-device`,'warn');
   }
-  // Fallback: on-device IMG.LY (slower but works offline)
-  if(removeBackground){
-    try{
-      const result=await cleanCutoutDevice(blob);
-      const transparency=await measureTransparency(result);
-      if(transparency<0.05)throw new Error(`On-device result opaque (${Math.round(transparency*100)}%)`);
-      dbg(`BG removal succeeded — on-device (${Math.round(transparency*100)}% transparent)`,'ok');
-      return result;
-    }catch(deviceErr){
-      throw new Error(`Both paths failed. Server: ${serverErr?.message}. Device: ${deviceErr.message}`);
-    }
-  }
-  throw new Error('No BG removal available (server unreachable, on-device not loaded)');
+  // On-device fallback disabled — IMG.LY distorts garment colors on this device.
+  // Server (RMBG-2.0) is the only path. If server fails, surface it clearly.
+  dbg('Server unavailable — not falling back to on-device (color distortion risk)','warn');
+  throw new Error('Background removal server unavailable. Please try again in a moment.');
 }
 
 function hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,s=d?d/(1-Math.abs(2*l-1)):0;let h=0;if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h=(h*60+360)%360}return{h,s,l,v:mx}}
