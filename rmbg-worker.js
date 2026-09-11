@@ -1,4 +1,4 @@
-// Dolapy RMBG Cloudflare Worker v2
+// Dolapy RMBG Cloudflare Worker v3
 // Proxies image to HF Space running briaai/RMBG-2.0
 // Deploy: wrangler deploy rmbg-worker.js --name dolapy-rmbg
 
