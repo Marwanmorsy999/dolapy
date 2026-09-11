@@ -6,10 +6,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import gradio as gr
 
-# Load model at startup — runs on GPU if available, CPU otherwise
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Loading RMBG-2.0 on {device}...")
-
 pipe = pipeline(
     "image-segmentation",
     model="briaai/RMBG-2.0",
@@ -57,10 +55,8 @@ async def remove_bg_endpoint(request: Request):
             image_bytes = base64.b64decode(b64)
         else:
             image_bytes = await request.body()
-
         if not image_bytes:
             return Response(content='{"error":"empty"}', status_code=400, media_type="application/json")
-
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         result = remove_background(image)
         buf = io.BytesIO()
@@ -72,18 +68,14 @@ async def remove_bg_endpoint(request: Request):
             headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
         )
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response(
-            content=f'{{"error":"{str(e)}"}}',
-            status_code=500,
-            media_type="application/json"
-        )
+        import traceback; traceback.print_exc()
+        return Response(content=f'{{"error":"{str(e)}"}}', status_code=500, media_type="application/json")
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": "briaai/RMBG-2.0", "device": device}
 
+# Mount Gradio at /ui so it does NOT shadow /remove-bg and /health
 def gradio_fn(image):
     if image is None:
         return None
@@ -94,8 +86,8 @@ demo = gr.Interface(
     inputs=gr.Image(type="pil", label="Garment photo"),
     outputs=gr.Image(type="pil", label="Background removed", image_mode="RGBA"),
     title="Dolapy — Background Removal",
-    description="RMBG-2.0 | POST /remove-bg for API access",
+    description="RMBG-2.0 | POST /remove-bg | GET /health",
     allow_flagging="never",
 )
 
-app = gr.mount_gradio_app(app, demo, path="/")
+app = gr.mount_gradio_app(app, demo, path="/ui")
