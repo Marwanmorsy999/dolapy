@@ -13,7 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Push to HuggingFace Space
+      - name: Create Space if it doesn't exist
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          curl -s -X POST https://huggingface.co/api/repos/create \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' || true
+
+      - name: Push files to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -22,22 +31,8 @@ jobs:
           git config user.email "dolapy@users.noreply.huggingface.co"
           git config user.name "Dolapy Bot"
           git add .
-          git commit -m "Deploy RMBG-2.0 Space"
-          git push --force https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg main 2>&1 || true
-          
-      - name: Create Space if push failed (Space may not exist yet)
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          # Create the Space via API
-          curl -s -X POST https://huggingface.co/api/repos/create \
-            -H "Authorization: Bearer ${HF_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' || true
-          
-          # Push again
-          cd hf-space
-          git push --force https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg main 2>&1 || true
-          
-          echo "Space URL: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg"
-          echo "API URL: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
+          git commit -m "Deploy: FastAPI + Gradio at /ui"
+          git push --force https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg main
+          echo "Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg"
+          echo "API:   https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
+          echo "Health: https://marwanmorsy999-dolapy-rmbg.hf.space/health"
