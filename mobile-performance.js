@@ -6,11 +6,11 @@ const slowNetwork=connection.saveData===true||/2g|3g/.test(connection.effectiveT
 window.DolapyPerformance={
   mobile:LOW_END||/Mobile/i.test(navigator.userAgent),
   lowPower:LOW_END||slowNetwork,
-  imageSize(){return this.lowPower?768:1024},
-  // Use the quantized model on CPU/mobile. FP16 is intended for capable GPU paths;
-  // forcing it through a mobile CPU/WASM fallback can leave the original image in place.
-  segmentationModel(){return 'isnet_quint8'}, // always use quantized — fp16 is slow and heavy in mobile browsers regardless of navigator.gpu
-  classifierOptions(){return navigator.gpu&&!this.lowPower?{device:'webgpu',dtype:'fp16'}:{device:'wasm',dtype:'q8'}},
+  imageSize(){return this.mobile?768:1024},
+  // fp16+gpu is faster on devices with real WebGPU; quint8+cpu as fallback
+  segmentationModel(){return navigator.gpu?'isnet_fp16':'isnet_quint8'},
+  segmentationDevice(){return navigator.gpu?'gpu':'cpu'},
+  classifierOptions(){return{device:'wasm',dtype:'q8'}},
   shouldRunSecondPass(score){return Number(score||0)<(this.lowPower?.32:.42)},
   compositeLimit(){return this.lowPower?4:6}
 };
