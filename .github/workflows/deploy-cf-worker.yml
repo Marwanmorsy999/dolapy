@@ -13,50 +13,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug CF token
+      - name: Deploy via CF REST API
         env:
           CF_TOKEN: ${{ secrets.CF_TOKEN }}
         run: |
-          echo "Token prefix: ${CF_TOKEN:0:8}..."
-          # Verify token works and get account ID
-          RESULT=$(curl -s -H "Authorization: Bearer $CF_TOKEN" \
-            https://api.cloudflare.com/client/v4/accounts?per_page=5)
-          echo "Accounts API result:"
-          echo "$RESULT" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-print('Success:', d.get('success'))
-print('Errors:', d.get('errors'))
-for a in d.get('result', []):
-    print('Account:', a['name'], '|', a['id'])
-" 2>/dev/null || echo "$RESULT"
+          set -e
 
-      - name: Deploy Worker via CF API
-        env:
-          CF_TOKEN: ${{ secrets.CF_TOKEN }}
-        run: |
-          # Get account ID
-          ACCOUNT_ID=$(curl -s -H "Authorization: Bearer $CF_TOKEN" \
-            https://api.cloudflare.com/client/v4/accounts?per_page=5 | \
-            python3 -c "import sys,json; d=json.load(sys.stdin); print(d['result'][0]['id'] if d.get('result') else '')" 2>/dev/null)
-          
-          echo "Account ID: $ACCOUNT_ID"
-          
-          if [ -z "$ACCOUNT_ID" ]; then
-            echo "ERROR: Could not get account ID. Token may lack Account:Read permission."
-            exit 1
-          fi
-          
-          # Deploy via wrangler with explicit account
-          npx wrangler@3 deploy rmbg-worker.js \
-            --name dolapy-rmbg \
-            --compatibility-date 2024-09-01 \
-            --no-bundle \
-            --account-id "$ACCOUNT_ID" 2>&1
-          
-          echo "Deploy exit code: $?"
+          echo "Verifying token..."
+          curl -sf -H "Authorization: Bearer $CF_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print('Token:', d.get('result',{}).get('status')); [print('ERR:', e) for e in d.get('errors',[])]"
+
+          echo "Getting account..."
+          ACCOUNT_ID=$(curl -sf -H "Authorization: Bearer $CF_TOKEN" \
+            https://api.cloudflare.com/client/v4/memberships?status=active | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print(d['result'][0]['account']['id'])")
+          echo "Account: $ACCOUNT_ID"
+
+          echo "Deploying worker..."
+          curl -sf -X PUT \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -F "metadata={\"main_module\":\"rmbg-worker.js\"}" \
+            -F "rmbg-worker.js=@rmbg-worker.js;type=application/javascript+module" \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/scripts/dolapy-rmbg" | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print('OK:', d.get('success')); [print('ERR:', e) for e in d.get('errors',[])]"
+
+          echo "Enabling workers.dev..."
+          curl -s -X POST \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"enabled":true}' \
+            "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/scripts/dolapy-rmbg/subdomain" | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print('Subdomain:', d.get('success'), d.get('errors'))"
 
       - name: Health check
         run: |
           sleep 5
-          curl -sv https://dolapy-rmbg.marwanmorsy999.workers.dev/health 2>&1 || true
+          curl -sf https://dolapy-rmbg.marwanmorsy999.workers.dev/health && echo "LIVE" || echo "Pending"
