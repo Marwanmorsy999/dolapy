@@ -3,7 +3,9 @@ title: Dolapy RMBG
 emoji: 👕
 colorFrom: yellow
 colorTo: green
-sdk: docker
+sdk: gradio
+sdk_version: "4.44.0"
+app_file: app.py
 pinned: true
 license: mit
 ---
@@ -14,6 +16,8 @@ license: mit
 
 ## Endpoints
 
-`POST /remove-bg` — multipart `image` field or raw bytes → transparent PNG
+`POST /remove-bg` — multipart `image` field → transparent PNG
 
-`GET /health` — status
+`GET /health` — status check
+
+`GET /ui` — Gradio web interface
