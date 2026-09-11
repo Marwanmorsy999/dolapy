@@ -76,7 +76,7 @@ async function loadAI(){
       try{
         status(true,'Preparing garment recognition…',20,'Loading recognition only once per session.');
         dbg('Loading classifier…');
-        classifier=await timeout(tf.pipeline('zero-shot-image-classification',MODEL,perf().classifierOptions()),perf().lowPower?60000:90000,'Classifier timed out');
+        classifier=await timeout(tf.pipeline('zero-shot-image-classification',MODEL,perf().classifierOptions()),perf().lowPower?8000:20000,'Classifier timed out');
         classifierLoaded=true;
         dbg('Classifier OK','ok');
       }catch(e){dbg('Classifier FAILED: '+e.message,'warn');classifier=null}
