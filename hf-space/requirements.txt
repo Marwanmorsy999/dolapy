@@ -1,0 +1,10 @@
+torch
+torchvision
+transformers>=4.38.0
+gradio>=4.44.0
+spaces
+Pillow
+numpy
+fastapi
+python-multipart
+uvicorn
