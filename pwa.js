@@ -50,7 +50,19 @@
   window.addEventListener('appinstalled', () => { deferredPrompt = null; document.getElementById('pwaInstallBanner')?.remove(); emitState(); });
 
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('Dolapy service worker unavailable', err)));
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js?v=' + Date.now()).then(reg => {
+      // Force immediate activation of waiting SW
+      if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        if (newSW) newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            newSW.postMessage({ type: 'SKIP_WAITING' });
+            window.location.reload();
+          }
+        });
+      });
+    }).catch((err) => console.warn('Dolapy service worker unavailable', err)));
   }
 
   window.addEventListener('load', () => {
