@@ -1,0 +1,7 @@
+name = "dolapy-rmbg"
+main = "rmbg-worker.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/10 * * * *"]  # ping HF Space every 10min to keep warm
