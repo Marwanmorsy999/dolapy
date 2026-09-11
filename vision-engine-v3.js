@@ -209,7 +209,9 @@ async function maskComposite(original,mask){
 }
 
 // Worker URL — Cloudflare Worker proxying to HF Space RMBG-2.0
-const RMBG_WORKER='https://dolapy-rmbg.marwanmorsy999.workers.dev';
+// Direct HF Space endpoint (Cloudflare Worker proxy to be added later)
+// Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg
+const RMBG_WORKER='https://marwanmorsy999-dolapy-rmbg.hf.space';
 
 async function cleanCutoutServer(blob){
   dbg('BG removal: server path (RMBG-2.0)');
