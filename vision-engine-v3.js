@@ -208,37 +208,64 @@ async function maskComposite(original,mask){
   return new Promise((res,rej)=>oc.toBlob(b=>b?res(b):rej(new Error('Cutout encoding failed')),'image/png',1));
 }
 
-async function cleanCutout(blob){
-  if(!removeBackground&&!segmentForeground)throw new Error('BG removal module not loaded');
-  const model=perf().segmentationModel?.()||'isnet_fp16';
-  const device=(perf().segmentationDevice?.()||( navigator.gpu?'gpu':'cpu'));
-  dbg(`BG removal: model=${model} device=${device}`);
-  let result=null;
-  // Always use removeBackground directly — it returns a transparent PNG with original RGB intact.
-  // segmentForeground returns a mask blob whose format is ambiguous (alpha vs luminance encoding varies
-  // by version), and the maskComposite step was producing 0% transparency. removeBackground is simpler,
-  // more reliable, and still preserves garment colors since it outputs original pixels + alpha channel.
-  if(removeBackground){
-    dbg('Using removeBackground (direct transparent PNG)');
-    result=await timeout(
-      removeBackground(blob,{device,model,output:{format:'image/png',quality:1}}),
-      perf().lowPower?90000:60000,'BG removal timed out'
-    );
-  } else if(segmentForeground){
-    // Fallback: segmentForeground + alpha-channel composite (not luminance)
-    dbg('Fallback: segmentForeground + alpha composite');
-    const mask=await timeout(
-      segmentForeground(blob,{device,model,output:{format:'image/png',quality:1}}),
-      perf().lowPower?90000:60000,'BG mask timed out'
-    );
-    dbg('Got mask, compositing via alpha channel…');
-    result=await maskCompositeAlpha(blob,mask);
+// Worker URL — Cloudflare Worker proxying to HF Space RMBG-2.0
+const RMBG_WORKER='https://dolapy-rmbg.marwanmorsy999.workers.dev';
+
+async function cleanCutoutServer(blob){
+  dbg('BG removal: server path (RMBG-2.0)');
+  const form=new FormData();
+  form.append('image',blob,'photo.jpg');
+  const res=await timeout(
+    fetch(`${RMBG_WORKER}/remove-bg`,{method:'POST',body:form}),
+    45000,'Server BG removal timed out'
+  );
+  if(!res.ok){
+    const err=await res.json().catch(()=>({error:'unknown'}));
+    throw new Error(`Server error ${res.status}: ${err.error||err.detail||'unknown'}`);
   }
-  if(!result)throw new Error('BG removal returned empty result');
-  const transparency=await measureTransparency(result);
-  if(transparency<0.05)throw new Error(`BG removal failed — only ${Math.round(transparency*100)}% transparent`);
-  dbg(`BG removal succeeded (${Math.round(transparency*100)}% transparent)`,'ok');
+  const png=await res.blob();
+  if(!png||png.size<1000)throw new Error('Server returned empty PNG');
+  dbg(`Server BG removal OK (${Math.round(png.size/1024)}KB)`,'ok');
+  return png;
+}
+
+async function cleanCutoutDevice(blob){
+  if(!removeBackground)throw new Error('On-device BG removal not loaded');
+  const model=perf().segmentationModel?.()||'isnet_fp16';
+  const device=perf().segmentationDevice?.()??( navigator.gpu?'gpu':'cpu');
+  dbg(`BG removal: on-device fallback model=${model} device=${device}`,'warn');
+  const result=await timeout(
+    removeBackground(blob,{device,model,output:{format:'image/png',quality:1}}),
+    90000,'On-device BG removal timed out'
+  );
+  if(!result)throw new Error('On-device BG removal returned empty result');
   return result;
+}
+
+async function cleanCutout(blob){
+  // Try server first (fast, high quality)
+  try{
+    const result=await cleanCutoutServer(blob);
+    const transparency=await measureTransparency(result);
+    if(transparency<0.05)throw new Error(`Server result opaque (${Math.round(transparency*100)}%)`);
+    dbg(`BG removal succeeded — server (${Math.round(transparency*100)}% transparent)`,'ok');
+    return result;
+  }catch(serverErr){
+    dbg(`Server failed: ${serverErr.message} — trying on-device`,'warn');
+  }
+  // Fallback: on-device IMG.LY (slower but works offline)
+  if(removeBackground){
+    try{
+      const result=await cleanCutoutDevice(blob);
+      const transparency=await measureTransparency(result);
+      if(transparency<0.05)throw new Error(`On-device result opaque (${Math.round(transparency*100)}%)`);
+      dbg(`BG removal succeeded — on-device (${Math.round(transparency*100)}% transparent)`,'ok');
+      return result;
+    }catch(deviceErr){
+      throw new Error(`Both paths failed. Server: ${serverErr?.message}. Device: ${deviceErr.message}`);
+    }
+  }
+  throw new Error('No BG removal available (server unreachable, on-device not loaded)');
 }
 
 function hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,s=d?d/(1-Math.abs(2*l-1)):0;let h=0;if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h=(h*60+360)%360}return{h,s,l,v:mx}}
@@ -288,7 +315,7 @@ async function analyse(file){
 
   let cutout=null,bgRemoved=false;
   if(removeBackground||segmentForeground){
-    status(true,'Removing background…',38,'Isolating the garment.');
+    status(true,'Removing background…',38,'Processing on our servers — 1-3 seconds.');
     try{
       cutout=await cleanCutout(normalized);
       bgRemoved=true;
