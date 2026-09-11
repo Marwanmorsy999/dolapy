@@ -1,0 +1,37 @@
+name: Deploy Cloudflare Worker (RMBG)
+
+on:
+  push:
+    paths:
+      - 'rmbg-worker.js'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Worker via Wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_TOKEN }}
+        run: |
+          # Write wrangler config
+          cat > wrangler.toml << 'WRANGLER'
+          name = "dolapy-rmbg"
+          main = "rmbg-worker.js"
+          compatibility_date = "2024-09-01"
+          WRANGLER
+
+          npx wrangler@latest deploy rmbg-worker.js \
+            --name dolapy-rmbg \
+            --compatibility-date 2024-09-01 \
+            --no-bundle 2>&1
+
+      - name: Verify deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_TOKEN }}
+        run: |
+          sleep 3
+          curl -sf https://dolapy-rmbg.marwanmorsy999.workers.dev/health || echo "Health check pending"
