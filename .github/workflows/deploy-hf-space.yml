@@ -13,10 +13,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install huggingface_hub
-        run: pip install huggingface_hub -q
-
-      - name: Upload to HF Space
+      - name: Delete and recreate Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python3 hf-space/deploy.py
+        run: |
+          echo "Deleting space..."
+          curl -s -X DELETE \
+            -H "Authorization: Bearer $HF_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"space","name":"dolapy-rmbg"}' \
+            https://huggingface.co/api/repos/delete
+          sleep 4
+          echo "Creating fresh gradio space..."
+          curl -sf -X POST \
+            -H "Authorization: Bearer $HF_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
+            https://huggingface.co/api/repos/create
+          sleep 3
+          echo "Space recreated."
+
+      - name: Push files via git
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          cd hf-space
+          git init
+          git config user.email "maro@dolapy.app"
+          git config user.name "Dolapy"
+          git add -A
+          git status
+          git commit -m "Deploy RMBG-2.0"
+          GIT_TERMINAL_PROMPT=0 git push --force \
+            "https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
+            HEAD:main
+          echo "Done: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
