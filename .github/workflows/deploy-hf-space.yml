@@ -13,38 +13,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Delete and recreate Space
+      - name: Prepare and push to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          echo "Deleting space..."
-          curl -s -X DELETE \
-            -H "Authorization: Bearer $HF_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"type":"space","name":"dolapy-rmbg"}' \
-            https://huggingface.co/api/repos/delete
-          sleep 4
-          echo "Creating fresh gradio space..."
-          curl -sf -X POST \
+          set -e
+
+          echo "=== Create space (ok if exists) ==="
+          curl -s -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
-            https://huggingface.co/api/repos/create
-          sleep 3
-          echo "Space recreated."
+            https://huggingface.co/api/repos/create || true
 
-      - name: Push files via git
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
+          sleep 2
+
+          echo "=== Push files ==="
           cd hf-space
           git init
           git config user.email "maro@dolapy.app"
           git config user.name "Dolapy"
           git add -A
-          git status
-          git commit -m "Deploy RMBG-2.0"
+          git commit -m "Deploy RMBG-2.0 FastAPI"
+
           GIT_TERMINAL_PROMPT=0 git push --force \
             "https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
-            HEAD:main
-          echo "Done: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
+            HEAD:main 2>&1
+
+          echo "=== Done ==="
