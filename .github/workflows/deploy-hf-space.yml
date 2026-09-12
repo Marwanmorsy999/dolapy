@@ -16,38 +16,49 @@ jobs:
       - name: Install huggingface_hub
         run: pip install huggingface_hub -q
 
-      - name: Upload files via huggingface_hub
+      - name: Delete, recreate and upload to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python3 << 'PYEOF'
-          import os
+          import os, time
           from huggingface_hub import HfApi
 
           token = os.environ["HF_TOKEN"]
           api = HfApi(token=token)
           repo_id = "Marwanmorsy999/dolapy-rmbg"
 
-          # Create space if needed
+          # Force delete existing space
+          print("Deleting existing space...")
           try:
-              api.create_repo(repo_id=repo_id, repo_type="space", space_sdk="gradio", exist_ok=True)
-              print("Space ready")
+              api.delete_repo(repo_id=repo_id, repo_type="space")
+              print("Deleted.")
+              time.sleep(5)
           except Exception as e:
-              print(f"Create warning: {e}")
+              print(f"Delete: {e}")
+
+          # Create fresh
+          print("Creating fresh space...")
+          api.create_repo(repo_id=repo_id, repo_type="space", space_sdk="gradio", private=False)
+          print("Created.")
+          time.sleep(3)
 
           # Upload files
           for local, remote in [
-              ("hf-space/app.py", "app.py"),
-              ("hf-space/requirements.txt", "requirements.txt"),
               ("hf-space/README.md", "README.md"),
+              ("hf-space/requirements.txt", "requirements.txt"),
+              ("hf-space/app.py", "app.py"),
           ]:
+              print(f"Uploading {remote}...")
               api.upload_file(
                   path_or_fileobj=local,
                   path_in_repo=remote,
                   repo_id=repo_id,
                   repo_type="space",
               )
-              print(f"Uploaded {remote}")
+              print(f"  Done: {remote}")
 
-          print("Done: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg")
+          print("All files uploaded.")
+          print("Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg")
+          print("API: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg")
           PYEOF
