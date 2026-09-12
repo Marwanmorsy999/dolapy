@@ -1,7 +1,6 @@
 torch
 torchvision
 transformers>=4.38.0
-gradio>=4.44.0
 Pillow
 numpy
 fastapi
