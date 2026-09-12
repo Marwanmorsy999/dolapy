@@ -4,8 +4,7 @@ from transformers import pipeline
 import io, base64, numpy as np
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import gradio as gr
+from fastapi.responses import JSONResponse, HTMLResponse
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"[Dolapy] Loading RMBG-2.0 on {device}...")
@@ -30,10 +29,15 @@ def _remove_bg(image: Image.Image) -> Image.Image:
     r, g, b, a = out.split()
     return Image.merge("RGBA", (r, g, b, mask_l))
 
-# Build FastAPI app first — routes registered here take priority
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
-    allow_methods=["POST","OPTIONS","GET"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST", "OPTIONS", "GET"],
+    allow_headers=["*"])
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return "<h2>Dolapy RMBG-2.0</h2><p>POST /remove-bg | GET /health</p>"
 
 @app.post("/remove-bg")
 async def remove_bg(request: Request):
@@ -48,7 +52,8 @@ async def remove_bg(request: Request):
         elif "json" in content_type:
             body = await request.json()
             b64 = body.get("image", "")
-            if "," in b64: b64 = b64.split(",", 1)[1]
+            if "," in b64:
+                b64 = b64.split(",", 1)[1]
             image_bytes = base64.b64decode(b64)
         else:
             image_bytes = await request.body()
@@ -59,8 +64,11 @@ async def remove_bg(request: Request):
         buf = io.BytesIO()
         result.save(buf, format="PNG")
         buf.seek(0)
-        return Response(content=buf.read(), media_type="image/png",
-            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+        return Response(
+            content=buf.read(),
+            media_type="image/png",
+            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"}
+        )
     except Exception as e:
         import traceback; traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -68,22 +76,3 @@ async def remove_bg(request: Request):
 @app.get("/health")
 async def health():
     return {"status": "ok", "model": "briaai/RMBG-2.0", "device": device}
-
-# Gradio UI — mounted at /ui so it does NOT override /remove-bg or /health
-# HF Spaces with gradio SDK requires a Gradio app to be present
-def gradio_fn(image):
-    if image is None: return None
-    return _remove_bg(image)
-
-with gr.Blocks(title="Dolapy RMBG") as demo:
-    gr.Markdown("## Dolapy Background Removal\nAPI: `POST /remove-bg` | `GET /health`")
-    with gr.Row():
-        inp = gr.Image(type="pil", label="Input")
-        out = gr.Image(type="pil", label="Output", image_mode="RGBA")
-    btn = gr.Button("Remove Background")
-    btn.click(gradio_fn, inputs=inp, outputs=out)
-
-# Mount at /ui — FastAPI owns /remove-bg and /health
-app = gr.mount_gradio_app(app, demo, path="/ui")
-
-# trigger
