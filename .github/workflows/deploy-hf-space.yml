@@ -17,19 +17,43 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          echo "=== User info ==="
+          curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            https://huggingface.co/api/whoami-v2
+
+          echo ""
+          echo "=== List user spaces ==="
+          curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            "https://huggingface.co/api/spaces?author=Marwanmorsy999&limit=20"
+
+          echo ""
+          echo "=== Create space ==="
           curl -s -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
-            https://huggingface.co/api/repos/create || true
-          sleep 2
+            https://huggingface.co/api/repos/create
+
+          echo ""
+          echo "=== Check space exists ==="
+          curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg" || \
+            echo "Space not found with Marwanmorsy999"
+
+          echo ""
+          echo "=== Push files ==="
           cd hf-space
           git init
           git config user.email "maro@dolapy.app"
           git config user.name "Dolapy"
           git add -A
-          git commit -m "Deploy RMBG-2.0"
+          git commit -m "Deploy"
           GIT_TERMINAL_PROMPT=0 git push --force \
             "https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
-            HEAD:main 2>&1 || echo "Push note: $?"
-          echo "Space: https://marwanmorsy999-dolapy-rmbg.hf.space"
+            HEAD:main 2>&1 || echo "PUSH EXIT: $?"
+
+          echo ""
+          echo "=== Space URL after push ==="
+          curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg" | \
+            grep -o '"url":"[^"]*"' || echo "No URL found"
