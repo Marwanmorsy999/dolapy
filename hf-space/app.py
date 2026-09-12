@@ -87,4 +87,3 @@ with gr.Blocks(title="Dolapy RMBG") as demo:
 app = gr.mount_gradio_app(app, demo, path="/ui")
 
 # trigger
- 
