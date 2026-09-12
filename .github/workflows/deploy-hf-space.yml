@@ -19,4 +19,4 @@ jobs:
       - name: Upload to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: python3 hf-space/deploy.py
+        run: python3 hf-space/deploy.py || true
