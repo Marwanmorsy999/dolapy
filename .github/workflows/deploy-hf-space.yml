@@ -17,29 +17,36 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          echo "Token starts with: ${HF_TOKEN:0:12}"
+          set -e
 
-          echo "=== Whoami ==="
-          curl -s -H "Authorization: Bearer $HF_TOKEN" \
-            https://huggingface.co/api/whoami-v2
-
-          echo ""
-          echo "=== Create/check space ==="
+          # Create space if needed (ignore error if exists)
           curl -s -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
-            https://huggingface.co/api/repos/create
+            https://huggingface.co/api/repos/create || true
 
-          echo ""
-          echo "=== Commit API test ==="
-          README='LS0tCnRpdGxlOiBEb2xhcHkgUk1CRwplbW9qaTogNDUKY29sb3JGcm9tOiB5ZWxsb3cKY29sb3JUbzogZ3JlZW4Kc2RrOiBncmFkaW8Kc2RrX3ZlcnNpb246ICI0LjQ0LjAiCmFwcF9maWxlOiBhcHAucHkKcGlubmVkOiB0cnVlCi0tLQoKIyBEb2xhcHkgUk1CRwo='
+          # Install jq if needed
+          which jq || apt-get install -y jq -q
 
-          curl -sv -X POST \
+          # Build payload with jq (handles escaping properly)
+          jq -n \
+            --rawfile app hf-space/app.py \
+            --rawfile reqs hf-space/requirements.txt \
+            --rawfile readme hf-space/README.md \
+            '{
+              operations: [
+                {op:"addOrUpdate", path:"app.py", content:($app | @base64)},
+                {op:"addOrUpdate", path:"requirements.txt", content:($reqs | @base64)},
+                {op:"addOrUpdate", path:"README.md", content:($readme | @base64)}
+              ],
+              commit_message: "Deploy RMBG-2.0 FastAPI"
+            }' > /tmp/payload.json
+
+          curl -sf -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"operations\":[{\"op\":\"addOrUpdate\",\"path\":\"README.md\",\"content\":\"$README\"}],\"commit_message\":\"test\"}" \
-            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg/commit/main" 2>&1
+            -d @/tmp/payload.json \
+            "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg/commit/main"
 
-          echo ""
-          echo "=== Done ==="
+          echo "Done: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
