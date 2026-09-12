@@ -19,29 +19,18 @@ jobs:
         run: |
           set -e
 
-          # Create space if needed (ignore error if exists)
           curl -s -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
             https://huggingface.co/api/repos/create || true
 
-          # Install jq if needed
-          which jq || apt-get install -y jq -q
+          APP=$(base64 -w0 hf-space/app.py)
+          REQS=$(base64 -w0 hf-space/requirements.txt)
+          README=$(base64 -w0 hf-space/README.md)
 
-          # Build payload with jq (handles escaping properly)
-          jq -n \
-            --rawfile app hf-space/app.py \
-            --rawfile reqs hf-space/requirements.txt \
-            --rawfile readme hf-space/README.md \
-            '{
-              operations: [
-                {op:"addOrUpdate", path:"app.py", content:($app | @base64)},
-                {op:"addOrUpdate", path:"requirements.txt", content:($reqs | @base64)},
-                {op:"addOrUpdate", path:"README.md", content:($readme | @base64)}
-              ],
-              commit_message: "Deploy RMBG-2.0 FastAPI"
-            }' > /tmp/payload.json
+          printf '{"operations":[{"op":"addOrUpdate","path":"app.py","content":"%s"},{"op":"addOrUpdate","path":"requirements.txt","content":"%s"},{"op":"addOrUpdate","path":"README.md","content":"%s"}],"commit_message":"Deploy RMBG-2.0"}' \
+            "$APP" "$REQS" "$README" > /tmp/payload.json
 
           curl -sf -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
@@ -49,4 +38,4 @@ jobs:
             -d @/tmp/payload.json \
             "https://huggingface.co/api/spaces/Marwanmorsy999/dolapy-rmbg/commit/main"
 
-          echo "Done: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg"
+          echo "Done"
