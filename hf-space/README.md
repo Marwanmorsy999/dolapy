@@ -12,12 +12,8 @@ license: mit
 
 # Dolapy Background Removal API
 
-**Model:** briaai/RMBG-2.0
+Model: briaai/RMBG-2.0
 
-## Endpoints
-
-`POST /remove-bg` — multipart `image` field → transparent PNG
-
-`GET /health` — status check
-
-`GET /ui` — Gradio web interface
+POST /remove-bg — multipart image field → transparent PNG
+GET /health — {"status":"ok"}
+GET / — info page
