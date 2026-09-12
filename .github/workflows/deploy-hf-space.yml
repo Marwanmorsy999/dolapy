@@ -16,49 +16,7 @@ jobs:
       - name: Install huggingface_hub
         run: pip install huggingface_hub -q
 
-      - name: Delete, recreate and upload to HF Space
+      - name: Upload to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          python3 << 'PYEOF'
-          import os, time
-          from huggingface_hub import HfApi
-
-          token = os.environ["HF_TOKEN"]
-          api = HfApi(token=token)
-          repo_id = "Marwanmorsy999/dolapy-rmbg"
-
-          # Force delete existing space
-          print("Deleting existing space...")
-          try:
-              api.delete_repo(repo_id=repo_id, repo_type="space")
-              print("Deleted.")
-              time.sleep(5)
-          except Exception as e:
-              print(f"Delete: {e}")
-
-          # Create fresh
-          print("Creating fresh space...")
-          api.create_repo(repo_id=repo_id, repo_type="space", space_sdk="gradio", private=False)
-          print("Created.")
-          time.sleep(3)
-
-          # Upload files
-          for local, remote in [
-              ("hf-space/README.md", "README.md"),
-              ("hf-space/requirements.txt", "requirements.txt"),
-              ("hf-space/app.py", "app.py"),
-          ]:
-              print(f"Uploading {remote}...")
-              api.upload_file(
-                  path_or_fileobj=local,
-                  path_in_repo=remote,
-                  repo_id=repo_id,
-                  repo_type="space",
-              )
-              print(f"  Done: {remote}")
-
-          print("All files uploaded.")
-          print("Space: https://huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg")
-          print("API: https://marwanmorsy999-dolapy-rmbg.hf.space/remove-bg")
-          PYEOF
+        run: python3 hf-space/deploy.py
