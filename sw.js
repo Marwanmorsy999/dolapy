@@ -1,4 +1,4 @@
-const CACHE='dolapy-pwa-v34';
+const CACHE='dolapy-pwa-v35';
 const APP_SHELL=['/','/index.html','/styles.css','/ai.css','/settings.css','/pwa.css','/intelligence.css','/engine-v3.css','/outfit-composer.css','/app.js','/wardrobe-intelligence.js','/context-engine.js','/engine-v3.js','/vision-engine-v3.js','/outfit-composer.js','/remote-vision.js','/mobile-menu.js','/settings.js','/pwa.js','/preload.js','/ai-provider.js','/migrate.js','/mobile-performance.js','/manifest.webmanifest','/icon.svg'];
 self.addEventListener('message',e=>{if(e.data&&e.data.type==='SKIP_WAITING')self.skipWaiting()});
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()))});
