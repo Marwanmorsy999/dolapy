@@ -17,22 +17,26 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          echo "=== Create space (ok if already exists) ==="
-          curl -s -X POST \
+          echo "=== Whoami ==="
+          curl -sf -H "Authorization: Bearer $HF_TOKEN" \
+            https://huggingface.co/api/whoami-v2
+
+          echo ""
+          echo "=== Create space ==="
+          curl -v -X POST \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"type":"space","name":"dolapy-rmbg","private":false,"sdk":"gradio"}' \
-            https://huggingface.co/api/repos/create || true
-          sleep 3
+            https://huggingface.co/api/repos/create 2>&1
 
-          echo "=== Push files ==="
+          echo ""
+          echo "=== Push ==="
           cd hf-space
           git init
           git config user.email "maro@dolapy.app"
           git config user.name "Dolapy"
           git add -A
-          git commit -m "Deploy RMBG-2.0"
+          git commit -m "deploy"
           GIT_TERMINAL_PROMPT=0 git push --force \
             "https://Marwanmorsy999:${HF_TOKEN}@huggingface.co/spaces/Marwanmorsy999/dolapy-rmbg" \
-            HEAD:main || (echo "PUSH FAILED" && exit 1)
-          echo "=== Success ==="
+            HEAD:main 2>&1 || echo "PUSH RESULT: $?"
