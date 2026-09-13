@@ -1,86 +1,73 @@
-// Dolapy RMBG Cloudflare Worker v3
-// Proxies image to HF Space running briaai/RMBG-2.0
-// Deploy: wrangler deploy rmbg-worker.js --name dolapy-rmbg
+// Dolapy RMBG Cloudflare Worker
+// Proxies to HF Inference API for briaai/RMBG-2.0
+// HF token injected by GitHub Actions (REPLACE_ME placeholder)
 
-const HF_SPACE = 'https://marwanmorsy999-dolapy-rmbg.hf.space';
+const INFERENCE_KEY = 'REPLACE_ME';
+const HF_INFERENCE = 'https://api-inference.huggingface.co/models/briaai/RMBG-2.0';
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
-        }
+      return new Response(null, {headers:{
+        'Access-Control-Allow-Origin':'*',
+        'Access-Control-Allow-Methods':'POST,GET,OPTIONS',
+        'Access-Control-Allow-Headers':'Content-Type',
+      }});
+    }
+
+    if (url.pathname === '/health') {
+      return Response.json({status:'ok',model:'briaai/RMBG-2.0'},{
+        headers:{'Access-Control-Allow-Origin':'*'}
       });
     }
 
-    // Health / wake-up ping
-    if (url.pathname === '/health' || url.pathname === '/ping') {
-      try {
-        const health = await fetch(`${HF_SPACE}/health`, {
-          signal: AbortSignal.timeout(8000)
-        });
-        const data = await health.json();
-        return Response.json({ ok: true, space: data }, {
-          headers: { 'Access-Control-Allow-Origin': '*' }
-        });
-      } catch (e) {
-        return Response.json({ ok: false, error: e.message }, {
-          status: 503,
-          headers: { 'Access-Control-Allow-Origin': '*' }
-        });
-      }
-    }
-
-    // Background removal
     if (url.pathname === '/remove-bg' && request.method === 'POST') {
       try {
-        // Forward the request body directly to HF Space
-        const contentType = request.headers.get('content-type') || '';
-        const body = await request.arrayBuffer();
+        const ct = request.headers.get('content-type') || '';
+        let bytes;
+        if (ct.includes('multipart')) {
+          const form = await request.formData();
+          const f = form.get('image');
+          if (!f) return Response.json({error:'no image field'},{status:400,headers:{'Access-Control-Allow-Origin':'*'}});
+          bytes = await f.arrayBuffer();
+        } else {
+          bytes = await request.arrayBuffer();
+        }
 
-        const upstream = await fetch(`${HF_SPACE}/remove-bg`, {
+        const upstream = await fetch(HF_INFERENCE, {
           method: 'POST',
-          headers: { 'Content-Type': contentType },
-          body,
-          signal: AbortSignal.timeout(60000) // 60s max
+          headers: {
+            'Authorization': `Bearer ${INFERENCE_KEY}`,
+            'Content-Type': 'application/octet-stream',
+            'Accept': 'image/png',
+          },
+          body: bytes,
+          signal: AbortSignal.timeout(45000),
         });
 
         if (!upstream.ok) {
-          const err = await upstream.text();
+          const txt = await upstream.text().catch(() => '');
           return Response.json(
-            { error: 'upstream_error', detail: err, status: upstream.status },
-            { status: 502, headers: { 'Access-Control-Allow-Origin': '*' } }
+            {error:`upstream ${upstream.status}`,detail:txt.slice(0,200),fallback:true},
+            {status:502,headers:{'Access-Control-Allow-Origin':'*'}}
           );
         }
 
-        // Stream PNG back to client
-        const png = await upstream.arrayBuffer();
-        return new Response(png, {
-          status: 200,
-          headers: {
-            'Content-Type': 'image/png',
-            'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'no-store',
-          }
-        });
-
-      } catch (e) {
-        // Return a specific error code so client knows to fall back to on-device
+        return new Response(await upstream.arrayBuffer(), {headers:{
+          'Content-Type':'image/png',
+          'Access-Control-Allow-Origin':'*',
+          'Cache-Control':'no-store',
+        }});
+      } catch(e) {
         return Response.json(
-          { error: 'worker_error', detail: e.message, fallback: true },
-          { status: 503, headers: { 'Access-Control-Allow-Origin': '*' } }
+          {error:e.message,fallback:true},
+          {status:503,headers:{'Access-Control-Allow-Origin':'*'}}
         );
       }
     }
 
-    return new Response('Dolapy RMBG Worker', {
-      headers: { 'Access-Control-Allow-Origin': '*' }
-    });
+    return new Response('Dolapy RMBG Proxy v2',{headers:{'Access-Control-Allow-Origin':'*'}});
   }
 };
