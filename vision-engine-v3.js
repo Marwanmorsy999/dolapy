@@ -3,7 +3,7 @@
 const STORE='dolapy.pages.v3';
 const TF_URL='https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 const MODEL='Xenova/clip-vit-base-patch32';
-const RMBG_WORKER='https://marwanmorsy999-dolapy-rmbg.hf.space';
+const RMBG_WORKER='https://dolapy-rmbg.marwanmorsy999.workers.dev';
 const $=s=>document.querySelector(s);
 
 let classifier=null,aiLoadPromise=null,current=null,queue=[];
