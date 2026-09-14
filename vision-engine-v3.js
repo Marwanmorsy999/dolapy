@@ -3,7 +3,9 @@
 const STORE='dolapy.pages.v3';
 const TF_URL='https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 const MODEL='Xenova/clip-vit-base-patch32';
-const RMBG_WORKER='https://dolapy-rmbg.marwanmorsy999.workers.dev';
+const HF_INFERENCE='https://api-inference.huggingface.co/models/briaai/RMBG-2.0';
+// Token stored in localStorage — set via settings or first-run prompt
+function getInferenceToken(){return localStorage.getItem('dolapy.hf.token')||'';}
 const $=s=>document.querySelector(s);
 
 let classifier=null,aiLoadPromise=null,current=null,queue=[];
@@ -133,24 +135,45 @@ async function measureTransparency(blob){
   }catch{return 0}
 }
 
-// Server BG removal — only path
+// Server BG removal via HF Inference API (token in localStorage)
 async function cleanCutout(blob){
-  console.log('[Dolapy] BG removal: server (RMBG-2.0)');
+  const token=getInferenceToken();
+  if(!token){
+    // Prompt user to enter token once
+    const t=prompt('Enter your HuggingFace token to enable background removal.\nGet one free at huggingface.co/settings/tokens\n\nLeave blank to skip:');
+    if(t&&t.trim()){
+      localStorage.setItem('dolapy.hf.token',t.trim());
+    } else {
+      throw new Error('No HuggingFace token configured. Add one in Settings to enable background removal.');
+    }
+  }
+  const useToken=getInferenceToken();
+  if(!useToken) throw new Error('No HuggingFace token configured.');
+  console.log('[Dolapy] BG removal: HF Inference API');
   status(true,'Removing background…',40,'Processing on our servers.');
-  const form=new FormData();
-  form.append('image',blob,'photo.jpg');
+  const buf=await blob.arrayBuffer();
   const res=await timeout(
-    fetch(`${RMBG_WORKER}/remove-bg`,{method:'POST',body:form}),
-    45000,'Server BG removal timed out'
+    fetch(HF_INFERENCE,{
+      method:'POST',
+      headers:{
+        'Authorization':`Bearer ${useToken}`,
+        'Content-Type':'application/octet-stream',
+        'Accept':'image/png',
+      },
+      body:buf
+    }),
+    45000,'BG removal timed out'
   );
   if(!res.ok){
-    const err=await res.json().catch(()=>({error:'unknown'}));
-    throw new Error(`Server ${res.status}: ${err.error||'unknown'}`);
+    const txt=await res.text().catch(()=>'');
+    // If 503 = model loading, retry hint
+    if(res.status===503) throw new Error('Model is loading on HuggingFace servers (cold start). Please try again in 20 seconds.');
+    throw new Error(`BG removal failed (${res.status}): ${txt.slice(0,100)}`);
   }
   const png=await res.blob();
-  if(!png||png.size<1000)throw new Error('Server returned empty result');
+  if(!png||png.size<1000)throw new Error('BG removal returned empty result');
   const transparency=await measureTransparency(png);
-  if(transparency<0.05)throw new Error(`BG removal failed (${Math.round(transparency*100)}% transparent)`);
+  if(transparency<0.05)throw new Error(`BG removal produced opaque image (${Math.round(transparency*100)}% transparent)`);
   console.log(`[Dolapy] BG removal OK — ${Math.round(transparency*100)}% transparent`);
   return png;
 }
