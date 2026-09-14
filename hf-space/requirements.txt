@@ -1,8 +1,0 @@
-torch
-torchvision
-transformers>=4.38.0
-Pillow
-numpy
-fastapi
-python-multipart
-uvicorn
