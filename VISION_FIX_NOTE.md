@@ -1,0 +1,1 @@
+Dolapy vision fix: deterministic on-device IMG.LY cutout path with explicit static model assets, GPU capability detection, CPU fallback, and original RGB restoration.
