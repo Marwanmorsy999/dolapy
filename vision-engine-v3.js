@@ -37,10 +37,36 @@ const silhouetteFromText=t=>{const s=String(t||'').toLowerCase();if(/oversized|b
 async function classify(blob){if(!classifier)return[];const u=URL.createObjectURL(blob);try{return await timeout(classifier(u,LABELS),30000,'Classification timed out')||[]}catch{return[]}finally{URL.revokeObjectURL(u)}}
 const filenameMeta=f=>{const text=f?.name?.replace(/\.[^/.]+$/,'').replace(/[-_]+/g,' ').trim()||'';return{text,category:categoryFromText(text),style:styleFromText(text),silhouette:silhouetteFromText(text)}};
 async function analyse(file){if(!file)throw new Error('No image supplied');status(true,'Preparing photo…',10,'Optimizing the camera image.');const normalized=await normalizeImage(file);const meta=filenameMeta(file);const classifierReady=ensureClassifier();let cutout=null,bgRemoved=false;try{cutout=await cleanCutout(normalized);bgRemoved=true}catch(e){console.warn('[Dolapy] BG removal failed:',e?.message||e)}status(true,'Identifying piece…',76,'Reading garment type.');await classifierReady;const results=await classify(cutout||normalized),best=results[0]||{label:'',score:0},label=best.label||'',text=`${label} ${meta.text}`.trim(),category=label&&Number(best.score||0)>=.08?categoryFromText(label):meta.category,style=styleFromText(text),silhouette=silhouetteFromText(text);status(true,'Detecting color…',90,'Reading garment color.');const color=await detectColor(cutout||normalized),lower=text.toLowerCase(),season=/linen|tank|shorts|sandal|summer|tee/.test(lower)?'summer':/wool|coat|puffer|fleece|thermal|winter|knit/.test(lower)?'winter':'all',confidence=clamp(Number(best.score||0));const nameBase=label||(category==='tops'?'T-Shirt':category==='bottoms'?'Bottoms':category);return{id:uid(),name:title([color.name||'',style!=='casual'?style:'',nameBase].filter(Boolean).join(' ')),image:await readFile(cutout||normalized),category,color:color.name||'neutral',colorFamily:color.family,style,season,occasion:style==='smart'?'smart':style==='athletic'?'sport':'everyday',silhouette,pattern:/stripe/.test(lower)?'stripe':/check|plaid/.test(lower)?'check':/graphic|print/.test(lower)?'graphic':'solid',warmth:category==='outerwear'?4:category==='shoes'?2:season==='summer'?1:season==='winter'?4:3,formality:style==='smart'?4:style==='preppy'?3:style==='athletic'?1:2,wearCount:0,favorite:false,aiIdentified:Boolean(label),backgroundRemoved:bgRemoved,visualConfidence:confidence,recognitionMargin:results[1]?clamp(confidence-Number(results[1].score||0)):confidence,aiAlternatives:results.slice(0,4).map(x=>({label:x.label,score:Number(x.score||0)})),metadataConfidence:clamp(confidence*.65+(color.name?.25:.08)+.1),createdAt:Date.now(),_bgWarning:bgRemoved?null:'Background could not be removed for this photo. The original photo was saved.'}}
-function openResult(item){current=item;$('#previewImg').src=item.image;$('#fName').value=item.name;$('#fCategory').value=item.category;$('#fColor').value=item.color;$('#fStyle').value=item.style;$('#queueInfo').textContent=item._bgWarning||`${queue.length?queue.length+' more piece'+(queue.length===1?'':'s')+' to review':'AI processing complete'}${item.backgroundRemoved?' · Background removed':''}`;$('#modal').hidden=false}
+function openResult(item){current=item;$('#previewImg').src=item.image;$('#fName').value=item.name;$('#fCategory').value=item.category;$('#fColor').value=item.color;$('#fStyle').value=item.style;$('#queueInfo').textContent=item._bgWarning||`${queue.length?queue.length+' more piece'+(queue.length===1?'':'s')+' ready':'AI processing complete'}${item.backgroundRemoved?' · Background removed':''}${(typeof batchTotal!=='undefined'&&batchTotal-batchReady>0)?', '+(batchTotal-batchReady)+' still processing':''}`;$('#modal').hidden=false}
 function closeResult(){current=null;queue=[];$('#modal').hidden=true}
 function save(){if(!current)return;const patch={name:$('#fName').value.trim()||current.name,category:$('#fCategory').value,color:$('#fColor').value.trim()||current.color,style:$('#fStyle').value};const item={...current,...patch,formality:patch.style==='smart'?4:patch.style==='preppy'?3:patch.style==='athletic'?1:2};let items=[];try{items=JSON.parse(localStorage.getItem(STORE)||'[]');if(!Array.isArray(items))items=[]}catch{}items.unshift(item);try{localStorage.setItem(STORE,JSON.stringify(items))}catch{alert('Your browser storage is full. Remove an older photo and try again.');return}window.dispatchEvent(new CustomEvent('dolapy:items-changed'));const next=queue.shift();if(next)openResult(next);else closeResult()}
-async function processFiles(files){queue=[];for(const file of files){try{queue.push(await timeout(analyse(file),40000,'Processing timed out'))}catch(e){console.error('[Dolapy] Vision error:',e);try{queue.push(await fallbackItem(file,e))}catch(e2){console.error('[Dolapy] Fallback also failed:',e2)}}}const first=queue.shift();if(first)openResult(first);else{status(false);alert('Dolapy could not process that photo. Please try another image.')}status(false)}
+let batchTotal=0,batchReady=0,batchOpened=false;
+async function processFiles(files){
+  queue=[];batchTotal=files.length;batchReady=0;batchOpened=false;
+  for(const file of files){
+    let item=null;
+    try{item=await timeout(analyse(file),40000,'Processing timed out')}
+    catch(e){console.error('[Dolapy] Vision error:',e);try{item=await fallbackItem(file,e)}catch(e2){console.error('[Dolapy] Fallback also failed:',e2)}}
+    if(item){
+      batchReady++;
+      if(!batchOpened){
+        batchOpened=true;
+        openResult(item);
+        status(false);
+      } else {
+        queue.push(item);
+        updateQueueInfo();
+      }
+    }
+  }
+  if(!batchOpened){status(false);alert('Dolapy could not process that photo. Please try another image.')}
+}
+function updateQueueInfo(){
+  if(!current)return;
+  const remaining=batchTotal-batchReady;
+  const waitingMore=remaining>0?`, ${remaining} still processing`:'';
+  $('#queueInfo').textContent=current._bgWarning||`${queue.length} more piece${queue.length===1?'':'s'} ready to review${waitingMore}`;
+}
 async function fallbackItem(file,err){const normalized=await normalizeImage(file).catch(()=>file);const meta=filenameMeta(file);return{id:uid(),name:title(meta.text||'New Piece'),image:await readFile(normalized),category:meta.category,color:'neutral',colorFamily:'neutral',style:meta.style,season:'all',occasion:'everyday',silhouette:meta.silhouette,pattern:'solid',warmth:3,formality:2,wearCount:0,favorite:false,aiIdentified:false,backgroundRemoved:false,visualConfidence:0,recognitionMargin:0,aiAlternatives:[],metadataConfidence:0.1,createdAt:Date.now(),_bgWarning:`AI processing timed out or failed (${err?.message||'unknown error'}). Saved the original photo — you can edit the details below.`}}
 window.startAIUpload=(files)=>{const list=[...(files||[])].filter(f=>f?.type?.startsWith('image/'));if(!list.length)return;status(true,'Starting AI…',5,'');processFiles(list).catch(e=>{console.error(e);status(false);alert('Dolapy could not process that photo. Please try another photo.')})};
 const isMobile=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'')||Boolean(globalThis.matchMedia?.('(pointer: coarse)')?.matches);
