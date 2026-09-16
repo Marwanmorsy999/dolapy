@@ -6,10 +6,10 @@ function loadItems(){try{const v=JSON.parse(localStorage.getItem(STORE_KEY)||'[]
 function sync(){items=loadItems();renderShell();renderWardrobe()}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function showStyle(){
-  $('#stylePage').hidden=false;$('#wardrobePage').hidden=true;$('#navStyle')?.classList.add('active');$('#navWardrobe')?.classList.remove('active');$('#bottomStyle')?.classList.add('active');$('#bottomWardrobe')?.classList.remove('active');renderShell();window.DolapyEngineV3?.refresh?.();
+  $('#stylePage').hidden=false;$('#wardrobePage').hidden=true;$('#builderPage')&&($('#builderPage').hidden=true);$('#navStyle')?.classList.add('active');$('#navWardrobe')?.classList.remove('active');$('#navBuilder')?.classList.remove('active');$('#bottomStyle')?.classList.add('active');$('#bottomWardrobe')?.classList.remove('active');$('#bottomBuilder')?.classList.remove('active');renderShell();window.DolapyEngineV3?.refresh?.();
 }
 function showWardrobe(){
-  $('#stylePage').hidden=true;$('#wardrobePage').hidden=false;$('#navStyle')?.classList.remove('active');$('#navWardrobe')?.classList.add('active');$('#bottomStyle')?.classList.remove('active');$('#bottomWardrobe')?.classList.add('active');renderWardrobe();
+  $('#stylePage').hidden=true;$('#wardrobePage').hidden=false;$('#builderPage')&&($('#builderPage').hidden=true);$('#navStyle')?.classList.remove('active');$('#navWardrobe')?.classList.add('active');$('#navBuilder')?.classList.remove('active');$('#bottomStyle')?.classList.remove('active');$('#bottomWardrobe')?.classList.add('active');$('#bottomBuilder')?.classList.remove('active');renderWardrobe();
 }
 function renderShell(){
   $('#statItems')&&($('#statItems').textContent=items.length);
