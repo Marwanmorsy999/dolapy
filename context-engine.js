@@ -41,6 +41,16 @@
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
   window.DolapyContext={get:getContext,save:saveContext,score:contextScore,render};
-  const boot=()=>{setTimeout(render,700);setTimeout(render,1800);};
+  function seedFromSettings(e){
+    const current=getContext();
+    // Only seed if the context store has never been explicitly written to
+    // (i.e. still exactly the hardcoded defaults, meaning the user hasn't touched
+    // the context-engine's own occasion/season/time pills this session).
+    let hasStored=false;try{hasStored=Boolean(localStorage.getItem(CONTEXT_KEY))}catch{}
+    if(hasStored)return;
+    const val=e?.detail?.defaultOccasion;
+    if(val&&val!==current.occasion)saveContext({occasion:val});
+  }
+  const boot=()=>{document.addEventListener('dolapy:settings-changed',seedFromSettings);setTimeout(render,700);setTimeout(render,1800);};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
