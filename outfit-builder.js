@@ -211,36 +211,50 @@ function wirePaletteTap(){
   });
 }
 
-async function exportOutfit(){
-  const canvas=$('#builderCanvas');
-  if(!canvas||!pieces.length){alert('Add some pieces to your outfit first.');return}
-
-  const rect=canvas.getBoundingClientRect();
-  const scale=2; // export at 2x for crisp downloads
-  const W=Math.round(rect.width*scale),H=Math.round(rect.height*scale);
-
+async function renderOutfitToCanvas(W,H){
   const out=document.createElement('canvas');
   out.width=W;out.height=H;
   const ctx=out.getContext('2d');
   ctx.fillStyle='#ffffff';
   ctx.fillRect(0,0,W,H);
-
   const sorted=[...pieces].sort((a,b)=>a.z-b.z);
+  let skipped=0;
   for(const p of sorted){
-    const img=await loadImage(p.img);
-    const px=(p.x/100)*W, py=(p.y/100)*H, pw=(p.w/100)*W;
-    const ph=pw*(img.naturalHeight/img.naturalWidth);
-    ctx.drawImage(img,px,py,pw,ph);
+    try{
+      const img=await loadImage(p.img);
+      const px=(p.x/100)*W, py=(p.y/100)*H, pw=(p.w/100)*W;
+      const ph=pw*(img.naturalHeight/img.naturalWidth);
+      ctx.drawImage(img,px,py,pw,ph);
+    }catch(e){
+      console.warn('[Dolapy] Skipping unrenderable piece in export:',p.name,e?.message||e);
+      skipped++;
+    }
   }
+  return{canvas:out,skipped};
+}
 
-  out.toBlob(blob=>{
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`dolapy-outfit-${Date.now()}.png`;
-    a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),2000);
-  },'image/png',1);
+async function exportOutfit(){
+  const canvas=$('#builderCanvas');
+  if(!canvas||!pieces.length){alert('Add some pieces to your outfit first.');return}
+  try{
+    const rect=canvas.getBoundingClientRect();
+    const scale=2; // export at 2x for crisp downloads
+    const W=Math.round(rect.width*scale),H=Math.round(rect.height*scale);
+    const{canvas:out,skipped}=await renderOutfitToCanvas(W,H);
+    out.toBlob(blob=>{
+      if(!blob){alert('Could not create the image. Please try again.');return}
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`dolapy-outfit-${Date.now()}.png`;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      if(skipped)alert(`Downloaded — ${skipped} piece${skipped===1?'':'s'} could not be included (image failed to load).`);
+    },'image/png',1);
+  }catch(e){
+    console.error('[Dolapy] Export failed:',e);
+    alert('Could not export this outfit. Please try again.');
+  }
 }
 
 function loadImage(src){
@@ -258,20 +272,16 @@ async function shareOutfit(){
   if(!canvas||!pieces.length){alert('Add some pieces to your outfit first.');return}
   if(!navigator.share){exportOutfit();return}
 
-  const rect=canvas.getBoundingClientRect();
-  const scale=2;
-  const W=Math.round(rect.width*scale),H=Math.round(rect.height*scale);
-  const out=document.createElement('canvas');
-  out.width=W;out.height=H;
-  const ctx=out.getContext('2d');
-  ctx.fillStyle='#ffffff';
-  ctx.fillRect(0,0,W,H);
-  const sorted=[...pieces].sort((a,b)=>a.z-b.z);
-  for(const p of sorted){
-    const img=await loadImage(p.img);
-    const px=(p.x/100)*W, py=(p.y/100)*H, pw=(p.w/100)*W;
-    const ph=pw*(img.naturalHeight/img.naturalWidth);
-    ctx.drawImage(img,px,py,pw,ph);
+  let out;
+  try{
+    const rect=canvas.getBoundingClientRect();
+    const scale=2;
+    const W=Math.round(rect.width*scale),H=Math.round(rect.height*scale);
+    ({canvas:out}=await renderOutfitToCanvas(W,H));
+  }catch(e){
+    console.error('[Dolapy] Share render failed:',e);
+    alert('Could not prepare this outfit for sharing. Please try again.');
+    return;
   }
 
   out.toBlob(async blob=>{
