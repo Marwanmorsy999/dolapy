@@ -317,8 +317,10 @@ function wire(){
   $('#builderBringFront')?.addEventListener('click',()=>selectedId&&bringToFront(selectedId));
   $('#builderRemoveSelected')?.addEventListener('click',()=>selectedId&&removePiece(selectedId));
   wireCanvasDrag();
-  wirePaletteDrag();
-  wirePaletteTap();
+  // Use exactly one input path per device to avoid double-adding a piece:
+  // fine pointers (mouse/trackpad) get HTML5 drag-and-drop; coarse pointers (touch) get tap-to-add.
+  const isCoarsePointer=matchMedia('(pointer: coarse)').matches;
+  if(isCoarsePointer)wirePaletteTap();else wirePaletteDrag();
   document.addEventListener('dolapy:items-changed',()=>{if(!$('#builderPage')?.hidden)renderPalette()});
 }
 
