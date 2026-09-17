@@ -24,7 +24,15 @@ document.addEventListener('dolapy:items-changed',sync);
 document.addEventListener('click',e=>{
   const filterButton=e.target.closest('[data-filter]');if(filterButton){filter=filterButton.dataset.filter;renderWardrobe();return}
   const favButton=e.target.closest('[data-fav]');if(favButton){const id=favButton.dataset.fav;items=items.map(x=>x.id===id?{...x,favorite:!x.favorite}:x);localStorage.setItem(STORE_KEY,JSON.stringify(items));renderWardrobe();document.dispatchEvent(new CustomEvent('dolapy:items-changed'));return}
-  const removeButton=e.target.closest('[data-remove]');if(removeButton){items=items.filter(x=>x.id!==removeButton.dataset.remove);localStorage.setItem(STORE_KEY,JSON.stringify(items));document.dispatchEvent(new CustomEvent('dolapy:items-changed'));showWardrobe();return}
+  const removeButton=e.target.closest('[data-remove]');if(removeButton){
+    let confirmDelete=true;
+    try{const s=JSON.parse(localStorage.getItem('dolapy.settings.v1')||'{}');if(s.confirmBeforeDelete===false)confirmDelete=false}catch{}
+    if(confirmDelete){
+      const target=items.find(x=>x.id===removeButton.dataset.remove);
+      if(!confirm(`Remove "${target?.name||'this piece'}" from your wardrobe? This can't be undone.`))return;
+    }
+    items=items.filter(x=>x.id!==removeButton.dataset.remove);localStorage.setItem(STORE_KEY,JSON.stringify(items));document.dispatchEvent(new CustomEvent('dolapy:items-changed'));showWardrobe();return
+  }
   if(e.target.id==='emptyUpload'||e.target.id==='wardrobeEmptyUpload')$('#addHeroAI')?.click();
   if(e.target.id==='styleHero')showStyle();
 });
