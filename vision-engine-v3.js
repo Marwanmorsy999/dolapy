@@ -45,7 +45,7 @@ async function processFiles(files){
   queue=[];batchTotal=files.length;batchReady=0;batchOpened=false;
   for(const file of files){
     let item=null;
-    try{item=await timeout(analyse(file),40000,'Processing timed out')}
+    try{item=await timeout(analyse(file),150000,'Processing timed out')}
     catch(e){console.error('[Dolapy] Vision error:',e);try{item=await fallbackItem(file,e)}catch(e2){console.error('[Dolapy] Fallback also failed:',e2)}}
     if(item){
       batchReady++;
