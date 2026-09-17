@@ -51,5 +51,5 @@
   .palette-grid{grid-template-columns:repeat(4,1fr)}
 }
 
-/* Shared: header action button rows used on hero + wardrobe heading */
-.heading-actions,.actions{display:flex;gap:10px;flex-wrap:wrap}
+/* Shared: header action button row for the wardrobe heading (mirrors .actions from styles.css) */
+.heading-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:25px}
