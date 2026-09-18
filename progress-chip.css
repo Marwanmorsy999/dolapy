@@ -1,0 +1,39 @@
+/* Non-blocking batch processing indicator — replaces the old "wait and stare" flow.
+   User can keep browsing the app while photos process in the background. */
+.batch-chip{
+  position:fixed;left:16px;right:16px;bottom:96px;z-index:55;
+  background:var(--ink);color:#fff;border-radius:16px;
+  box-shadow:0 20px 44px rgba(23,27,35,.28);
+  padding:12px 14px;display:flex;align-items:center;gap:12px;
+  max-width:440px;margin:0 auto;
+}
+@media(min-width:980px){.batch-chip{left:auto;right:24px;bottom:24px;margin:0}}
+.batch-chip-spinner{width:20px;height:20px;border-radius:50%;flex:0 0 20px;
+  border:2.5px solid rgba(255,255,255,.25);border-top-color:var(--lime);
+  animation:batch-spin .8s linear infinite}
+@keyframes batch-spin{to{transform:rotate(360deg)}}
+.batch-chip-body{flex:1;min-width:0}
+.batch-chip-title{font-size:13px;font-weight:800;line-height:1.3}
+.batch-chip-sub{font-size:11.5px;color:rgba(255,255,255,.65);margin-top:1px}
+.batch-chip-actions{display:flex;gap:6px;flex:0 0 auto}
+.batch-chip-actions button{
+  width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.12);
+  color:#fff;display:grid;place-items:center;flex:0 0 30px;
+}
+.batch-chip-actions button:hover{background:rgba(255,255,255,.2)}
+.batch-chip.batch-chip-done{background:#1f6b3a}
+.batch-chip.batch-chip-done .batch-chip-spinner{display:none}
+
+.resume-banner{
+  position:fixed;top:14px;left:16px;right:16px;z-index:70;
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 20px 44px rgba(23,27,35,.16);padding:14px 16px;
+  display:flex;align-items:center;gap:12px;max-width:520px;margin:0 auto;
+}
+@media(min-width:980px){.resume-banner{left:auto;right:24px;margin:0}}
+.resume-banner-body{flex:1;font-size:13px;line-height:1.4}
+.resume-banner-body strong{display:block;margin-bottom:2px}
+.resume-banner-actions{display:flex;gap:8px;flex:0 0 auto}
+.resume-banner-actions button{padding:8px 12px;font-size:12.5px;border-radius:9px;font-weight:700}
+.resume-banner-actions .resume-yes{background:var(--lime);color:var(--ink)}
+.resume-banner-actions .resume-no{background:#f3f6f8;color:var(--muted)}
