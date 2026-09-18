@@ -1,14 +1,12 @@
 (()=>{
 'use strict';
 const STORE='dolapy.pages.v3';
-const BG_URL='https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
-const BG_PUBLIC_PATH='https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/';
 const TF_URL='https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0';
 const MODEL='Xenova/clip-vit-base-patch32';
 const $=s=>document.querySelector(s);
-let removeBackground=null,tfModule=null,classifier=null;
-let bgLoadPromise=null,classifierPromise=null,current=null,queue=[];
-const perf=()=>window.DolapyPerformance||{mobile:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),lowPower:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)&&!navigator.gpu,imageSize:()=>768,segmentationModel:()=>navigator.gpu?'isnet_fp16':'isnet_quint8',segmentationDevice:()=>navigator.gpu?'gpu':'cpu',classifierOptions:()=>({device:'wasm',dtype:'q8'})};
+let tfModule=null,classifier=null;
+let classifierPromise=null,current=null,queue=[];
+const perf=()=>window.DolapyPerformance||{mobile:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent),lowPower:/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)&&!navigator.gpu,imageSize:()=>768,classifierOptions:()=>({device:'wasm',dtype:'q8'})};
 const LABELS=['t-shirt','graphic t-shirt','polo shirt','button-up shirt','shirt','hoodie','sweater','cardigan','jacket','coat','blazer','overshirt','jeans','wide-leg trousers','trousers','cargo pants','chinos','shorts','skirt','dress','suit','sneakers','boots','loafers','sandals','heels','slides','bag','backpack','cap','hat','belt','watch','scarf','glasses'];
 const COLORS={black:['black','charcoal','graphite'],white:['white','cream','ivory'],grey:['grey','gray','silver'],neutral:['beige','tan','camel','khaki','sand','stone','oat'],brown:['brown','chocolate','mocha','coffee'],blue:['navy','blue','denim','cobalt','teal','sky','azure'],green:['green','olive','sage','forest','mint'],red:['red','burgundy','maroon','wine','crimson'],orange:['orange','rust','terracotta','coral'],yellow:['yellow','mustard','gold'],purple:['purple','lavender','lilac','violet'],pink:['pink','rose','blush']};
 const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,Number(n)||0));
@@ -16,17 +14,35 @@ const uid=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().
 const title=s=>String(s||'').replace(/(^|[\s-])([a-z])/g,(m,p,c)=>p+c.toUpperCase());
 function status(show,label='',pct=0,sub=''){let e=$('#aiScanStatus');if(!e){e=document.createElement('div');e.id='aiScanStatus';e.className='scan-status';e.hidden=true;e.innerHTML='<div class="scan-card"><div class="scan-spinner"></div><div class="scan-copy"><strong id="aiScanLabel"></strong><span id="aiScanSub"></span></div><div class="scan-track"><span id="aiScanBar"></span></div></div>';document.body.appendChild(e)}e.hidden=!show;if(show){$('#aiScanLabel').textContent=label;$('#aiScanSub').textContent=sub;$('#aiScanBar').style.width=`${clamp(pct/100)*100}%`}}
 function timeout(p,ms,msg){let t;return Promise.race([p,new Promise((_,r)=>t=setTimeout(()=>r(new Error(msg)),ms))]).finally(()=>clearTimeout(t))}
-async function loadAI(){if(removeBackground)return removeBackground;if(bgLoadPromise)return bgLoadPromise;bgLoadPromise=(async()=>{try{const m=await timeout(import(BG_URL),20000,'BG module download timed out (slow/blocked network)');removeBackground=m.removeBackground||m.default||null;if(typeof removeBackground!=='function')throw new Error('IMG.LY removeBackground export unavailable');console.log('[Dolapy] BG module ready; explicit model asset path configured');return removeBackground}catch(e){removeBackground=null;console.warn('[Dolapy] BG module failed:',e?.message||e);throw e}finally{bgLoadPromise=null}})();return bgLoadPromise}
 async function ensureClassifier(){if(classifier)return classifier;if(classifierPromise)return classifierPromise;classifierPromise=(async()=>{try{if(!tfModule)tfModule=await timeout(import(TF_URL),20000,'Classifier module download timed out');classifier=await timeout(tfModule.pipeline('zero-shot-image-classification',MODEL,perf().classifierOptions()),120000,'Classifier load timed out');console.log('[Dolapy] Classifier ready')}catch(e){console.warn('[Dolapy] Classifier unavailable:',e?.message||e);classifier=null}finally{classifierPromise=null}return classifier})();return classifierPromise}
-window.warmDolapyAI=()=>{loadAI().catch(()=>{});ensureClassifier().catch(()=>{})};
+window.warmDolapyAI=()=>{ensureClassifier().catch(()=>{})};
 function readFile(file){return new Promise((res,rej)=>{const r=new FileReader();r.onerror=()=>rej(new Error('Read failed'));r.onload=()=>res(r.result);r.readAsDataURL(file)})}
 function imageFromSource(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Decode failed'));i.src=src})}
 async function normalizeImage(input,maxSize){const max=maxSize||768;let bitmap=null;if(typeof createImageBitmap==='function'&&(input instanceof Blob||input instanceof File)){try{bitmap=await createImageBitmap(input,{imageOrientation:'from-image'})}catch{}}const src=bitmap||await imageFromSource(typeof input==='string'?input:await readFile(input));const w=bitmap?bitmap.width:src.naturalWidth,h=bitmap?bitmap.height:src.naturalHeight,scale=Math.min(1,max/Math.max(w||1,h||1));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*scale));c.height=Math.max(1,Math.round(h*scale));const x=c.getContext('2d',{alpha:false});if(!x){bitmap?.close?.();throw new Error('Canvas unavailable')}x.drawImage(src,0,0,c.width,c.height);bitmap?.close?.();return new Promise((res,rej)=>c.toBlob(v=>v?res(v):rej(new Error('Encode failed')),'image/jpeg',.9))}
 async function restoreOriginalColors(originalBlob,bgRemovedBlob){try{const [orig,removed]=await Promise.all([imageFromSource(await readFile(originalBlob)),imageFromSource(await readFile(bgRemovedBlob))]);const w=removed.naturalWidth,h=removed.naturalHeight,oc=document.createElement('canvas'),rc=document.createElement('canvas');oc.width=rc.width=w;oc.height=rc.height=h;const ox=oc.getContext('2d',{willReadFrequently:true,alpha:false}),rx=rc.getContext('2d',{willReadFrequently:true,alpha:true});if(!ox||!rx)return bgRemovedBlob;ox.drawImage(orig,0,0,w,h);rx.drawImage(removed,0,0,w,h);const od=ox.getImageData(0,0,w,h).data,rd=rx.getImageData(0,0,w,h),px=rd.data;for(let i=0;i<px.length;i+=4){if(px[i+3]>0){px[i]=od[i];px[i+1]=od[i+1];px[i+2]=od[i+2]}}const out=document.createElement('canvas');out.width=w;out.height=h;out.getContext('2d',{alpha:true}).putImageData(rd,0,0);return await new Promise((res,rej)=>out.toBlob(v=>v?res(v):rej(new Error('Output encode failed')),'image/png',1))}catch(e){console.warn('[Dolapy] Color restore failed:',e?.message||e);return bgRemovedBlob}}
 async function validateCutout(blob){try{const im=await imageFromSource(await readFile(blob)),s=64,c=document.createElement('canvas');c.width=c.height=s;const x=c.getContext('2d',{willReadFrequently:true});if(!x)return true;x.drawImage(im,0,0,s,s);const d=x.getImageData(0,0,s,s).data;let transparent=0;for(let i=3;i<d.length;i+=4)if(d[i]<64)transparent++;const ratio=transparent/(s*s),corners=[[0,0],[56,0],[0,56],[56,56]];let clear=0;for(const [cx,cy]of corners){let t=0;for(let yy=cy;yy<cy+8;yy++)for(let xx=cx;xx<cx+8;xx++)if(d[(yy*s+xx)*4+3]<64)t++;if(t/64>.5)clear++}console.log(`[Dolapy] Cutout check: ${Math.round(ratio*100)}% transparent, ${clear}/4 clear corners`);return ratio>=.15&&clear>=3}catch(e){console.warn('[Dolapy] Cutout validation skipped:',e?.message||e);return true}}
-async function remoteRemoveBackground(originalBlob){const form=new FormData();form.append('image',originalBlob,'photo.jpg');const res=await timeout(fetch('/api/remove-bg',{method:'POST',body:form}),3000,'Remote BG removal timed out');if(!res.ok){let msg=`Remote BG removal failed (${res.status})`;try{const j=await res.json();if(j?.error)msg=j.error}catch{}throw new Error(msg)}return await res.blob()}
-async function localRemoveBackground(originalBlob){await loadAI();const model=perf().segmentationModel?.()??'isnet_fp16';const device=perf().segmentationDevice?.()??'cpu';status(true,'Removing background…',35,'Isolating the garment locally.');const cfg=(m,d)=>({device:d,model:m,publicPath:BG_PUBLIC_PATH,proxyToWorker:true,output:{format:'image/png',quality:1},progress:(key,n,total)=>status(true,'Removing background…',40+Math.round((n/Math.max(total,1))*30),'Loading/running the local segmentation model.')});try{console.log(`[Dolapy] Local BG removal primary: ${model}/${device}`);return await timeout(removeBackground(originalBlob,cfg(model,device)),60000,'BG removal timed out')}catch(e){console.warn('[Dolapy] Local BG removal primary failed:',e?.message||e);const fallbackModel=model==='isnet_fp16'?'isnet_quint8':'isnet_fp16';const fallbackDevice=fallbackModel==='isnet_fp16'&&navigator.gpu?'gpu':'cpu';console.log(`[Dolapy] Local BG removal fallback: ${fallbackModel}/${fallbackDevice}`);return await timeout(removeBackground(originalBlob,cfg(fallbackModel,fallbackDevice)),90000,'BG removal fallback timed out')}}
-async function cleanCutout(originalBlob){status(true,'Removing background…',35,'Isolating the garment.');let result=null;try{console.log('[Dolapy] Trying server-side background removal');result=await remoteRemoveBackground(originalBlob);console.log('[Dolapy] Server-side BG removal succeeded')}catch(e){console.warn('[Dolapy] Server-side BG removal unavailable, falling back to local model:',e?.message||e);result=await localRemoveBackground(originalBlob)}if(!result)throw new Error('BG removal returned empty result');if(!(await validateCutout(result)))throw new Error('BG removal produced an opaque result');return restoreOriginalColors(originalBlob,result)}
+async function cleanCutout(originalBlob){
+  status(true,'Removing background…',35,'Isolating the garment.');
+  const form=new FormData();
+  form.append('image',originalBlob,'photo.jpg');
+  let res;
+  try{
+    res=await timeout(fetch('/api/remove-bg',{method:'POST',body:form}),25000,'Background removal server did not respond in time');
+  }catch(e){
+    throw new Error(`Could not reach the background removal service: ${e?.message||e}`);
+  }
+  if(!res.ok){
+    let msg=`Background removal failed (${res.status})`;
+    try{const j=await res.json();if(j?.error)msg=j.error}catch{}
+    if(res.status===501)msg='Background removal is not enabled on this deployment yet.';
+    throw new Error(msg);
+  }
+  const result=await res.blob();
+  if(!result||result.size<200)throw new Error('Background removal returned an empty result');
+  status(true,'Removing background…',75,'Cleaning up the cutout.');
+  if(!(await validateCutout(result)))throw new Error('Background removal produced an opaque result — the photo may not have enough contrast between the garment and its background');
+  return restoreOriginalColors(originalBlob,result);
+}
 function hsl(r,g,b){r/=255;g/=255;b/=255;const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,s=d?d/(1-Math.abs(2*l-1)):0;let h=0;if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h=(h*60+360)%360}return{h,s,l,v:mx}}
 function colorName(r,g,b){const{h,s,l,v}=hsl(r,g,b);if(v<.16)return'black';if(v<.28&&s<.28)return'charcoal';if(l>.92&&s<.13)return'white';if(l>.82&&s<.24)return'cream';if(s<.1&&l<.7)return'grey';if(s<.2&&l>=.7)return'beige';if(l<.42&&h>=15&&h<45&&s>.22)return'brown';if(h>=345||h<12)return l<.45?'burgundy':'red';if(h<42)return l<.42?'rust':'orange';if(h<72)return l<.45?'mustard':'yellow';if(h<160)return l<.45?'olive':'green';if(h<255)return l<.42?'navy':'blue';if(h<310)return l<.46?'purple':'lavender';return l<.5?'rose':'pink'}
 const family=n=>{const s=String(n||'').toLowerCase();for(const[k,w]of Object.entries(COLORS))if(w.some(x=>s.includes(x)))return k;return'unknown'};
@@ -36,7 +52,7 @@ const styleFromText=t=>{const s=String(t||'').toLowerCase();if(/cargo|hoodie|jac
 const silhouetteFromText=t=>{const s=String(t||'').toLowerCase();if(/oversized|boxy|baggy/.test(s))return'oversized';if(/wide[- ]leg|wide|relaxed/.test(s))return'relaxed';if(/slim|skinny|tapered|fitted/.test(s))return'slim';return'regular'};
 async function classify(blob){if(!classifier)return[];const u=URL.createObjectURL(blob);try{return await timeout(classifier(u,LABELS),30000,'Classification timed out')||[]}catch{return[]}finally{URL.revokeObjectURL(u)}}
 const filenameMeta=f=>{const text=f?.name?.replace(/\.[^/.]+$/,'').replace(/[-_]+/g,' ').trim()||'';return{text,category:categoryFromText(text),style:styleFromText(text),silhouette:silhouetteFromText(text)}};
-async function analyse(file){if(!file)throw new Error('No image supplied');status(true,'Preparing photo…',10,'Optimizing the camera image.');const normalized=await normalizeImage(file);const meta=filenameMeta(file);const classifierReady=ensureClassifier();let cutout=null,bgRemoved=false;try{cutout=await cleanCutout(normalized);bgRemoved=true}catch(e){console.warn('[Dolapy] BG removal failed:',e?.message||e)}status(true,'Identifying piece…',76,'Reading garment type.');await classifierReady;const results=await classify(cutout||normalized),best=results[0]||{label:'',score:0},label=best.label||'',text=`${label} ${meta.text}`.trim(),category=label&&Number(best.score||0)>=.08?categoryFromText(label):meta.category,style=styleFromText(text),silhouette=silhouetteFromText(text);status(true,'Detecting color…',90,'Reading garment color.');const color=await detectColor(cutout||normalized),lower=text.toLowerCase(),season=/linen|tank|shorts|sandal|summer|tee/.test(lower)?'summer':/wool|coat|puffer|fleece|thermal|winter|knit/.test(lower)?'winter':'all',confidence=clamp(Number(best.score||0));const nameBase=label||(category==='tops'?'T-Shirt':category==='bottoms'?'Bottoms':category);return{id:uid(),name:title([color.name||'',style!=='casual'?style:'',nameBase].filter(Boolean).join(' ')),image:await readFile(cutout||normalized),category,color:color.name||'neutral',colorFamily:color.family,style,season,occasion:style==='smart'?'smart':style==='athletic'?'sport':'everyday',silhouette,pattern:/stripe/.test(lower)?'stripe':/check|plaid/.test(lower)?'check':/graphic|print/.test(lower)?'graphic':'solid',warmth:category==='outerwear'?4:category==='shoes'?2:season==='summer'?1:season==='winter'?4:3,formality:style==='smart'?4:style==='preppy'?3:style==='athletic'?1:2,wearCount:0,favorite:false,aiIdentified:Boolean(label),backgroundRemoved:bgRemoved,visualConfidence:confidence,recognitionMargin:results[1]?clamp(confidence-Number(results[1].score||0)):confidence,aiAlternatives:results.slice(0,4).map(x=>({label:x.label,score:Number(x.score||0)})),metadataConfidence:clamp(confidence*.65+(color.name?.25:.08)+.1),createdAt:Date.now(),_bgWarning:bgRemoved?null:'Background could not be removed for this photo. The original photo was saved.'}}
+async function analyse(file){if(!file)throw new Error('No image supplied');status(true,'Preparing photo…',10,'Optimizing the camera image.');const normalized=await normalizeImage(file);const meta=filenameMeta(file);const classifierReady=ensureClassifier();let cutout=null,bgRemoved=false,bgError=null;try{cutout=await cleanCutout(normalized);bgRemoved=true}catch(e){bgError=e?.message||String(e);console.warn('[Dolapy] BG removal failed:',bgError)}status(true,'Identifying piece…',76,'Reading garment type.');await classifierReady;const results=await classify(cutout||normalized),best=results[0]||{label:'',score:0},label=best.label||'',text=`${label} ${meta.text}`.trim(),category=label&&Number(best.score||0)>=.08?categoryFromText(label):meta.category,style=styleFromText(text),silhouette=silhouetteFromText(text);status(true,'Detecting color…',90,'Reading garment color.');const color=await detectColor(cutout||normalized),lower=text.toLowerCase(),season=/linen|tank|shorts|sandal|summer|tee/.test(lower)?'summer':/wool|coat|puffer|fleece|thermal|winter|knit/.test(lower)?'winter':'all',confidence=clamp(Number(best.score||0));const nameBase=label||(category==='tops'?'T-Shirt':category==='bottoms'?'Bottoms':category);return{id:uid(),name:title([color.name||'',style!=='casual'?style:'',nameBase].filter(Boolean).join(' ')),image:await readFile(cutout||normalized),category,color:color.name||'neutral',colorFamily:color.family,style,season,occasion:style==='smart'?'smart':style==='athletic'?'sport':'everyday',silhouette,pattern:/stripe/.test(lower)?'stripe':/check|plaid/.test(lower)?'check':/graphic|print/.test(lower)?'graphic':'solid',warmth:category==='outerwear'?4:category==='shoes'?2:season==='summer'?1:season==='winter'?4:3,formality:style==='smart'?4:style==='preppy'?3:style==='athletic'?1:2,wearCount:0,favorite:false,aiIdentified:Boolean(label),backgroundRemoved:bgRemoved,visualConfidence:confidence,recognitionMargin:results[1]?clamp(confidence-Number(results[1].score||0)):confidence,aiAlternatives:results.slice(0,4).map(x=>({label:x.label,score:Number(x.score||0)})),metadataConfidence:clamp(confidence*.65+(color.name?.25:.08)+.1),createdAt:Date.now(),_bgWarning:bgRemoved?null:`Background removal didn't work for this photo (${bgError||'unknown error'}). The original photo was saved — you can still edit the details below.`}}
 function openResult(item){current=item;$('#previewImg').src=item.image;$('#fName').value=item.name;$('#fCategory').value=item.category;$('#fColor').value=item.color;$('#fStyle').value=item.style;$('#queueInfo').textContent=item._bgWarning||`${queue.length?queue.length+' more piece'+(queue.length===1?'':'s')+' ready':'AI processing complete'}${item.backgroundRemoved?' · Background removed':''}`;$('#modal').hidden=false}
 function closeResult(){current=null;$('#modal').hidden=true}
 function save(){if(!current)return;const patch={name:$('#fName').value.trim()||current.name,category:$('#fCategory').value,color:$('#fColor').value.trim()||current.color,style:$('#fStyle').value};const{_persistedId,_bgWarning,...clean}=current;const item={...clean,...patch,formality:patch.style==='smart'?4:patch.style==='preppy'?3:patch.style==='athletic'?1:2};let items=[];try{items=JSON.parse(localStorage.getItem(STORE)||'[]');if(!Array.isArray(items))items=[]}catch{}items.unshift(item);try{localStorage.setItem(STORE,JSON.stringify(items))}catch{alert('Your browser storage is full. Remove an older photo and try again.');return}window.dispatchEvent(new CustomEvent('dolapy:items-changed'));if(_persistedId)window.DolapyQueueStore?.removeEntry(_persistedId).catch(()=>{});const next=queue.shift();if(next)openResult(next);else closeResult();updateBatchChip()}
@@ -49,7 +65,7 @@ async function fallbackItem(file,err){const normalized=await normalizeImage(file
 // background behind a small dismissible progress chip; the review modal opens only
 // when the user taps a finished item, never forced automatically.
 let batchActive=false,batchQueueMeta={total:0,done:0,failed:0};
-let firstPhotoStartedAt=0,firstPhotoDurationMs=0;
+let photoDurations=[]; // rolling samples, first one excluded once we have a second (it includes one-time classifier warm-up)
 
 function chip(){
   let e=$('#batchChip');
@@ -60,8 +76,13 @@ function chip(){
 function estimateRemaining(){
   const left=batchQueueMeta.total-batchQueueMeta.done-batchQueueMeta.failed;
   if(left<=0)return'';
-  if(!firstPhotoDurationMs)return', estimating time…';
-  const secs=Math.round((firstPhotoDurationMs*left)/1000);
+  if(!photoDurations.length)return', estimating time…';
+  // The first photo often pays a one-time classifier warm-up cost that doesn't recur —
+  // once we have a second, faster sample, drop the first outlier from the average so the
+  // estimate reflects steady-state speed rather than a wildly inflated first-photo number.
+  const samples=photoDurations.length>1?photoDurations.slice(1):photoDurations;
+  const avgMs=samples.reduce((a,b)=>a+b,0)/samples.length;
+  const secs=Math.round((avgMs*left)/1000);
   if(secs<60)return`, about ${secs}s left`;
   return`, about ${Math.round(secs/60)} min left`;
 }
@@ -106,12 +127,12 @@ async function processOneFile(file,persistedId){
   const startedAt=Date.now();
   let item=null;
   try{
-    item=await timeout(analyse(file),150000,'Processing timed out');
+    item=await timeout(analyse(file),210000,'Processing timed out');
   }catch(e){
     console.error('[Dolapy] Vision error:',e);
     try{item=await fallbackItem(file,e)}catch(e2){console.error('[Dolapy] Fallback also failed:',e2)}
   }
-  if(!firstPhotoDurationMs)firstPhotoDurationMs=Date.now()-startedAt;
+  photoDurations.push(Date.now()-startedAt);
   if(persistedId){
     if(item)await window.DolapyQueueStore?.updateEntry(persistedId,{status:'done',result:item}).catch(()=>{});
     else await window.DolapyQueueStore?.updateEntry(persistedId,{status:'failed',error:'processing failed'}).catch(()=>{});
@@ -123,7 +144,7 @@ async function runBatch(entries){
   // entries: [{file, persistedId}]
   batchActive=true;
   batchQueueMeta={total:entries.length,done:0,failed:0};
-  firstPhotoDurationMs=0;
+  photoDurations=[];
   updateBatchChip();
   for(const {file,persistedId} of entries){
     const item=await processOneFile(file,persistedId);
