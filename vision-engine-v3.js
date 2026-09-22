@@ -17,7 +17,36 @@ async function ensureClassifier(){if(classifier)return classifier;if(classifierP
 window.warmDolapyAI=()=>{ensureClassifier().catch(()=>{})};
 function readFile(file){return new Promise((res,rej)=>{const r=new FileReader();r.onerror=()=>rej(new Error('Read failed'));r.onload=()=>res(r.result);r.readAsDataURL(file)})}
 function imageFromSource(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Decode failed'));i.src=src})}
-async function normalizeImage(input,maxSize){const max=maxSize||768;let bitmap=null;if(typeof createImageBitmap==='function'&&(input instanceof Blob||input instanceof File)){try{bitmap=await createImageBitmap(input,{imageOrientation:'from-image'})}catch{}}const src=bitmap||await imageFromSource(typeof input==='string'?input:await readFile(input));const w=bitmap?bitmap.width:src.naturalWidth,h=bitmap?bitmap.height:src.naturalHeight,scale=Math.min(1,max/Math.max(w||1,h||1));const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*scale));c.height=Math.max(1,Math.round(h*scale));const x=c.getContext('2d',{alpha:false});if(!x){bitmap?.close?.();throw new Error('Canvas unavailable')}x.drawImage(src,0,0,c.width,c.height);bitmap?.close?.();return new Promise((res,rej)=>c.toBlob(v=>v?res(v):rej(new Error('Encode failed')),'image/jpeg',.9))}
+async function normalizeImage(input,maxSize){
+  const max=maxSize||768;
+  let bitmap=null,bitmapError=null;
+  if(typeof createImageBitmap==='function'&&(input instanceof Blob||input instanceof File)){
+    try{bitmap=await createImageBitmap(input,{imageOrientation:'from-image'})}
+    catch(e){bitmapError=e}
+  }
+  let src=bitmap;
+  if(!src){
+    try{
+      src=await imageFromSource(typeof input==='string'?input:await readFile(input));
+    }catch(e){
+      // Both decode paths failed — this is a real, specific failure (unsupported format
+      // like HEIC on a browser that can't decode it, or a corrupted file), not a generic
+      // error. Say so clearly instead of letting a vague rejection bubble up.
+      const type=input?.type||'unknown type';
+      throw new Error(`This photo's format (${type}) couldn't be opened by your browser. Try taking the photo again, or check your phone's camera format settings (avoid HEIC if possible).`);
+    }
+  }
+  const w=bitmap?bitmap.width:src.naturalWidth,h=bitmap?bitmap.height:src.naturalHeight;
+  if(!w||!h){bitmap?.close?.();throw new Error('This photo has no readable image data (0×0 dimensions) — it may be corrupted.')}
+  const scale=Math.min(1,max/Math.max(w,h));
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w*scale));c.height=Math.max(1,Math.round(h*scale));
+  const x=c.getContext('2d',{alpha:false});
+  if(!x){bitmap?.close?.();throw new Error('Canvas unavailable')}
+  x.drawImage(src,0,0,c.width,c.height);
+  bitmap?.close?.();
+  return new Promise((res,rej)=>c.toBlob(v=>v?res(v):rej(new Error('Could not encode this photo — it may be corrupted or in an unsupported format.')),'image/jpeg',.9));
+}
 async function restoreOriginalColors(originalBlob,bgRemovedBlob){try{const [orig,removed]=await Promise.all([imageFromSource(await readFile(originalBlob)),imageFromSource(await readFile(bgRemovedBlob))]);const w=removed.naturalWidth,h=removed.naturalHeight,oc=document.createElement('canvas'),rc=document.createElement('canvas');oc.width=rc.width=w;oc.height=rc.height=h;const ox=oc.getContext('2d',{willReadFrequently:true,alpha:false}),rx=rc.getContext('2d',{willReadFrequently:true,alpha:true});if(!ox||!rx)return bgRemovedBlob;ox.drawImage(orig,0,0,w,h);rx.drawImage(removed,0,0,w,h);const od=ox.getImageData(0,0,w,h).data,rd=rx.getImageData(0,0,w,h),px=rd.data;for(let i=0;i<px.length;i+=4){if(px[i+3]>0){px[i]=od[i];px[i+1]=od[i+1];px[i+2]=od[i+2]}}const out=document.createElement('canvas');out.width=w;out.height=h;out.getContext('2d',{alpha:true}).putImageData(rd,0,0);return await new Promise((res,rej)=>out.toBlob(v=>v?res(v):rej(new Error('Output encode failed')),'image/png',1))}catch(e){console.warn('[Dolapy] Color restore failed:',e?.message||e);return bgRemovedBlob}}
 async function validateCutout(blob){try{const im=await imageFromSource(await readFile(blob)),s=64,c=document.createElement('canvas');c.width=c.height=s;const x=c.getContext('2d',{willReadFrequently:true});if(!x)return true;x.drawImage(im,0,0,s,s);const d=x.getImageData(0,0,s,s).data;let transparent=0;for(let i=3;i<d.length;i+=4)if(d[i]<64)transparent++;const ratio=transparent/(s*s),corners=[[0,0],[56,0],[0,56],[56,56]];let clear=0;for(const [cx,cy]of corners){let t=0;for(let yy=cy;yy<cy+8;yy++)for(let xx=cx;xx<cx+8;xx++)if(d[(yy*s+xx)*4+3]<64)t++;if(t/64>.5)clear++}console.log(`[Dolapy] Cutout check: ${Math.round(ratio*100)}% transparent, ${clear}/4 clear corners`);return ratio>=.15&&clear>=3}catch(e){console.warn('[Dolapy] Cutout validation skipped:',e?.message||e);return true}}
 async function cleanCutout(originalBlob){
@@ -55,7 +84,20 @@ async function analyse(file){if(!file)throw new Error('No image supplied');setSt
 function openResult(item){current=item;$('#previewImg').src=item.image;$('#fName').value=item.name;$('#fCategory').value=item.category;$('#fColor').value=item.color;$('#fStyle').value=item.style;$('#queueInfo').textContent=item._bgWarning||`${queue.length?queue.length+' more piece'+(queue.length===1?'':'s')+' ready':'AI processing complete'}${item.backgroundRemoved?' · Background removed':''}`;$('#modal').hidden=false}
 function closeResult(){current=null;$('#modal').hidden=true}
 function save(){if(!current)return;const patch={name:$('#fName').value.trim()||current.name,category:$('#fCategory').value,color:$('#fColor').value.trim()||current.color,style:$('#fStyle').value};const{_persistedId,_bgWarning,...clean}=current;const item={...clean,...patch,formality:patch.style==='smart'?4:patch.style==='preppy'?3:patch.style==='athletic'?1:2};let items=[];try{items=JSON.parse(localStorage.getItem(STORE)||'[]');if(!Array.isArray(items))items=[]}catch{}items.unshift(item);try{localStorage.setItem(STORE,JSON.stringify(items))}catch{alert('Your browser storage is full. Remove an older photo and try again.');return}window.dispatchEvent(new CustomEvent('dolapy:items-changed'));if(_persistedId)window.DolapyQueueStore?.removeEntry(_persistedId).catch(()=>{});const next=queue.shift();if(next)openResult(next);else closeResult();updateBatchChip()}
-async function fallbackItem(file,err){const normalized=await normalizeImage(file).catch(()=>file);const meta=filenameMeta(file);return{id:uid(),name:title(meta.text||'New Piece'),image:await readFile(normalized),category:meta.category,color:'neutral',colorFamily:'neutral',style:meta.style,season:'all',occasion:'everyday',silhouette:meta.silhouette,pattern:'solid',warmth:3,formality:2,wearCount:0,favorite:false,aiIdentified:false,backgroundRemoved:false,visualConfidence:0,recognitionMargin:0,aiAlternatives:[],metadataConfidence:0.1,createdAt:Date.now(),_bgWarning:`AI processing timed out or failed (${err?.message||'unknown error'}). Saved the original photo — you can edit the details below.`}}
+async function fallbackItem(file,err){
+  const meta=filenameMeta(file);
+  let normalized=null,imageData=null;
+  try{
+    normalized=await normalizeImage(file);
+    imageData=await readFile(normalized);
+  }catch(normalizeErr){
+    // The photo genuinely can't be decoded/displayed at all — don't fall back to the raw
+    // undecodable file (that's what was producing a broken-image icon in ~2s with no
+    // real processing). Surface the real reason clearly instead of a silent garbage item.
+    throw new Error(err?.message&&!/timed out/i.test(err.message)?err.message:normalizeErr.message);
+  }
+  return{id:uid(),name:title(meta.text||'New Piece'),image:imageData,category:meta.category,color:'neutral',colorFamily:'neutral',style:meta.style,season:'all',occasion:'everyday',silhouette:meta.silhouette,pattern:'solid',warmth:3,formality:2,wearCount:0,favorite:false,aiIdentified:false,backgroundRemoved:false,visualConfidence:0,recognitionMargin:0,aiAlternatives:[],metadataConfidence:0.1,createdAt:Date.now(),_bgWarning:`AI processing timed out or failed (${err?.message||'unknown error'}). Saved the original photo — you can edit the details below.`}
+}
 
 // ---- Non-blocking batch processing (IndexedDB-persisted, resumable) ----
 // Replaces the old "modal blocks until first photo is ready" flow. Photos are written
@@ -66,6 +108,7 @@ async function fallbackItem(file,err){const normalized=await normalizeImage(file
 let batchActive=false,batchQueueMeta={total:0,done:0,failed:0};
 let photoDurations=[]; // rolling samples, first one excluded once we have a second (it includes one-time classifier warm-up)
 let currentStage='';
+let lastFailureReason='';
 function setStage(text){currentStage=text;updateBatchChip()}
 
 function chip(){
@@ -95,7 +138,7 @@ function updateBatchChip(){
   if(!total||finished>=total){
     if(total&&finished>=total){
       e.className='batch-chip batch-chip-done';
-      e.innerHTML=`<div class="batch-chip-spinner"></div><div class="batch-chip-body"><div class="batch-chip-title">${done} piece${done===1?'':'s'} ready to review${failed?`, ${failed} failed`:''}</div><div class="batch-chip-sub">Tap to open</div></div><div class="batch-chip-actions"><button data-chip-dismiss aria-label="Dismiss">×</button></div>`;
+      e.innerHTML=`<div class="batch-chip-spinner"></div><div class="batch-chip-body"><div class="batch-chip-title">${done} piece${done===1?'':'s'} ready to review${failed?`, ${failed} failed`:''}</div><div class="batch-chip-sub">${failed&&lastFailureReason?lastFailureReason:'Tap to open'}</div></div><div class="batch-chip-actions"><button data-chip-dismiss aria-label="Dismiss">×</button></div>`;
       e.hidden=false;
       setTimeout(()=>{if(!batchActive)e.hidden=true},8000);
     } else {
@@ -131,7 +174,7 @@ async function processOneFile(file,persistedId){
     item=await timeout(analyse(file),210000,'Processing timed out');
   }catch(e){
     console.error('[Dolapy] Vision error:',e);
-    try{item=await fallbackItem(file,e)}catch(e2){console.error('[Dolapy] Fallback also failed:',e2)}
+    try{item=await fallbackItem(file,e)}catch(e2){console.error('[Dolapy] Fallback also failed:',e2);lastFailureReason=e2?.message||String(e2)}
   }
   photoDurations.push(Date.now()-startedAt);
   if(persistedId){
